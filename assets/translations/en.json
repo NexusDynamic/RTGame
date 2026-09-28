@@ -7,7 +7,7 @@
     "soloSubtitle": "Climb as high as you can before time runs out",
     "online": "Play online",
     "onlineSubtitle": "Team up or compete with other players",
-    "onlineComingSoon": "Online play is coming soon",
+    "onlineNoServer": "Choose a server in Settings to play online",
     "settings": "Settings",
     "bestSolo": "Best: level {} · {}",
     "editor": "Level editor",
@@ -70,6 +70,7 @@
     "title": "Settings",
     "sections": {
       "player": "Player",
+      "online": "Online",
       "game": "Solo game",
       "audio": "Sound",
       "display": "Display & controls",
@@ -112,7 +113,17 @@
       "cancel": "Cancel",
       "select": "Select"
     },
-    "resetDefaults": "Reset to defaults"
+    "resetDefaults": "Reset to defaults",
+    "server": {
+      "title": "Server",
+      "none": "None (offline only)",
+      "defaultIs": "Leave empty to use the default: {}",
+      "defaultNone": "This version has no default server.",
+      "invalid": "Enter an address starting with https://",
+      "webHint": "In the browser, the server must allow this website's address.",
+      "useDefault": "Use default",
+      "save": "Save"
+    }
   },
   "online": {
     "waitingForHost": "Waiting for the host…",

@@ -101,6 +101,14 @@ mixin class AppSettings {
           ],
         ),
         GroupConfig(
+          key: 'online',
+          items: [
+            /// The player's own lobby server; empty = this build's default.
+            /// Typed on this device, never received. See OnlineConfig.
+            StringSetting(key: 'server_url', defaultValue: ''),
+          ],
+        ),
+        GroupConfig(
           key: 'levels',
           items: [
             /// The player's own custom levels and packs, as JSON. Only ever

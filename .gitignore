@@ -75,3 +75,9 @@ mounts/
 scripts/.pubspec_full.yaml
 
 .helix/
+
+# Personal tooling
+.helix/
+.envrc
+.active-devices
+.python-version

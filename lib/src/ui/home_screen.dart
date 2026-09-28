@@ -24,19 +24,19 @@ class _HomeScreenState extends State<HomeScreen> with AppSettings {
     if (mounted) setState(() {});
   }
 
-  /// The lobby when this build has one; the debug LAN screen when it only
-  /// has a dev hub; otherwise online play is not available.
-  VoidCallback? _onlineAction() {
+  /// The lobby when there is a server; the debug LAN screen when there is
+  /// only a dev hub; otherwise Settings, to pick a server.
+  VoidCallback _onlineAction() {
     final lobby = OnlineConfig.lobbyUrl;
     if (lobby != null) return () => _open(OnlineMenuScreen(lobbyUrl: lobby));
     if (DevLanScreen.isAvailable) return () => _open(const DevLanScreen());
-    return null;
+    return () => _open(const SettingsScreen());
   }
 
   String _onlineSubtitle() {
     if (OnlineConfig.isAvailable) return 'home.onlineSubtitle'.tr();
     if (DevLanScreen.isAvailable) return 'LAN test (debug)';
-    return 'home.onlineComingSoon'.tr();
+    return 'home.onlineNoServer'.tr();
   }
 
   @override

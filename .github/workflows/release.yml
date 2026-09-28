@@ -1,0 +1,126 @@
+name: Release
+
+# Started by pushing a v<version> tag, where <version> is pubspec.yaml's
+# version without its +build number (0.1.0+1 → v0.1.0):
+#
+#   parse ─┬→ test (ci.yml) ─┬→ lobby image (GHCR)
+#          │                 │
+#          └→ build ─────────┴→ GitHub release → GitHub Pages
+#
+# Versions with a pre-release part (v0.2.0-beta.1) become pre-releases: they
+# get binaries and a lobby image tag, but do not replace Pages or `latest`.
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      prerelease: ${{ steps.parse.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the tag against pubspec.yaml
+        id: parse
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG#v}"
+          PUBSPEC="$(sed -nE 's/^version:[[:space:]]*([^+[:space:]]+).*/\1/p' pubspec.yaml)"
+          if [ "$VERSION" != "$PUBSPEC" ]; then
+            echo "::error::Tag $TAG does not match pubspec.yaml version $PUBSPEC"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    needs: parse
+    uses: ./.github/workflows/ci.yml
+
+  # Builds run alongside the tests but are only released once tests pass.
+  build:
+    needs: parse
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.parse.outputs.version }}
+    secrets: inherit
+
+  github-release:
+    needs: [parse, test, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rt-*
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Rise Together ${{ needs.parse.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ needs.parse.outputs.prerelease == 'true' }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.apk
+
+  pages:
+    needs: [parse, github-release]
+    if: needs.parse.outputs.prerelease != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
+
+  lobby-image:
+    needs: [parse, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/rtgame-lobby
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.parse.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.parse.outputs.prerelease != 'true' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          file: server/deploy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

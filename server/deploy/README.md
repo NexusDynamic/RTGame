@@ -41,7 +41,10 @@ record raw addresses.
 There are two builds, and you only run one of them yourself:
 
 - **The lobby** (`server/bin/lobby.dart`) is compiled by the Dockerfile when
-  you pass `--build`. There is nothing to build for it by hand.
+  you pass `--build`. There is nothing to build for it by hand. Each release
+  also publishes the image as `ghcr.io/nexusdynamic/rtgame-lobby:<version>`
+  (and `:latest`); to use it, set `image:` on the `lobby` service instead of
+  `build:`.
 - **The web app** is the game itself (`lib/main.dart` at the repository
   root). Build it from the **repository root**, not from `server/`. That is
   why `flutter build` reports `Target file "lib/main.dart" not found` when it
@@ -56,7 +59,18 @@ There are two builds, and you only run one of them yourself:
 
   `LOBBY_URL` is the same host that serves the web app. The lobby only
   accepts browsers from `https://$DOMAIN` (`ALLOWED_ORIGINS`), so serve both
-  from one domain. Native builds use the same `--dart-define`.
+  from one domain. Native builds use the same `--dart-define`. Without it,
+  builds default to `https://rt-lobby.nexusdynamic.org`; players can also
+  point any build at your server in Settings → Online → Server.
+
+  Each GitHub release also has a ready-made web build
+  (`RiseTogether-<version>-web.zip`) that uses the default lobby. Only use
+  it if you are running rt-lobby.nexusdynamic.org itself.
+
+  A web app served from somewhere else (another domain, GitHub Pages) can
+  only use your lobby if you add its origin to `ALLOWED_ORIGINS`, e.g.
+  `https://play.example.com,https://you.github.io`. Native apps send no
+  Origin and are not affected.
 
 Then `cp .env.example .env` in this directory, and fill in `DOMAIN`,
 `PUBLIC_IP` and the two secrets. After that, pick one of the two options

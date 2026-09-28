@@ -7,7 +7,7 @@
     "soloSubtitle": "Kom så højt op som muligt, før tiden løber ud",
     "online": "Spil online",
     "onlineSubtitle": "Spil sammen med eller mod andre",
-    "onlineComingSoon": "Onlinespil kommer snart",
+    "onlineNoServer": "Vælg en server i Indstillinger for at spille online",
     "settings": "Indstillinger",
     "bestSolo": "Bedste: niveau {} · {}",
     "editor": "Baneeditor",
@@ -70,6 +70,7 @@
     "title": "Indstillinger",
     "sections": {
       "player": "Spiller",
+      "online": "Online",
       "game": "Solospil",
       "audio": "Lyd",
       "display": "Visning og styring",
@@ -112,7 +113,17 @@
       "cancel": "Annuller",
       "select": "Vælg"
     },
-    "resetDefaults": "Nulstil til standard"
+    "resetDefaults": "Nulstil til standard",
+    "server": {
+      "title": "Server",
+      "none": "Ingen (kun offline)",
+      "defaultIs": "Lad feltet stå tomt for at bruge standarden: {}",
+      "defaultNone": "Denne version har ingen standardserver.",
+      "invalid": "Skriv en adresse, der starter med https://",
+      "webHint": "I browseren skal serveren tillade denne hjemmesides adresse.",
+      "useDefault": "Brug standard",
+      "save": "Gem"
+    }
   },
   "online": {
     "waitingForHost": "Venter på værten…",

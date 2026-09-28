@@ -1,0 +1,15 @@
+name: Feature request
+description: An idea for the game
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: What would it make better, or what problem does it solve?

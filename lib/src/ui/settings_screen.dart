@@ -2,7 +2,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:easy_shared_preferences/easy_shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:rise_together_game/src/online/online_config.dart';
 import 'package:rise_together_game/src/services/audio_manager.dart';
+import 'package:rise_together_game/src/ui/server_dialog.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
 
 /// Player-facing settings. Changes are saved as they are made.
@@ -71,6 +73,15 @@ class _SettingsScreenState extends State<SettingsScreen> with AppSettings {
               onChanged: (value) =>
                   appSettings.setString('player.nickname', value.trim()),
             ),
+          ),
+          _Section('settings.sections.online'.tr()),
+          ListTile(
+            leading: const Icon(Icons.dns),
+            title: Text('settings.server.title'.tr()),
+            subtitle: Text(
+              OnlineConfig.lobbyUrl?.toString() ?? 'settings.server.none'.tr(),
+            ),
+            onTap: _editServer,
           ),
           _Section('settings.sections.game'.tr()),
           ListTile(
@@ -194,6 +205,19 @@ class _SettingsScreenState extends State<SettingsScreen> with AppSettings {
         ],
       ),
     );
+  }
+
+  Future<void> _editServer() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => ServerDialog(
+        initial: appSettings.getString(OnlineConfig.settingKey),
+        defaultUrl: OnlineConfig.defaultUrl,
+      ),
+    );
+    if (result != null) {
+      await _set(() => appSettings.setString(OnlineConfig.settingKey, result));
+    }
   }
 
   Widget _colorTile(String team, String key) {

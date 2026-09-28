@@ -18,7 +18,7 @@
 	<string>Apple Distribution</string>
 	<key>provisioningProfiles</key>
 	<dict>
-		<key>com.zeyus.rise-together</key>
+		<key>com.zeyus.rise-together-game</key>
 		<string>PROFILE_UUID_PLACEHOLDER</string>
 	</dict>
 </dict>
