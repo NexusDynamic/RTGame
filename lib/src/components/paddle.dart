@@ -161,7 +161,10 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
   }) {
     appLog.info("current paddle angle: ${body.angle}");
     stopMovement();
-    cancelPendingTransforms();
+    // Only a repositioning reshape may discard staged transforms. On a
+    // follower the frame's network pose is staged just before a width sync,
+    // and dropping it rendered the paddle at its last-applied pose for a frame.
+    if (resetPosition) cancelPendingTransforms();
 
     _start.setFrom(newStart);
     _end.setFrom(newEnd);
@@ -307,7 +310,11 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
       appLog.info(
         'Updated temp multiplier: $oldTemp -> $_tempWidthMultiplier (new total: $widthMultiplier)',
       );
-      _updatePaddleWidth();
+      // resetPosition: false -- the pose is the coordinator's, and it arrives
+      // alongside this multiplier. Resetting teleported the paddle (and the
+      // camera following it) to the level start for one frame on every
+      // powerup/powerdown.
+      _updatePaddleWidth(resetPosition: false);
     }
   }
 

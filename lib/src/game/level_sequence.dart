@@ -54,6 +54,10 @@ class LevelSequence {
       const Level4(),
       const Level5(),
       const Level6(),
+      const Level7(),
+      const Level8(),
+      const Level9(),
+      const Level10(),
     ]);
   }
 

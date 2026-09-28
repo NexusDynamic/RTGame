@@ -20,6 +20,12 @@ class WorldController with AppLogging, Resetable {
 
   /// Control reversal state
   bool _controlsReversed = false;
+
+  /// Nesting depth of countdown locks on the authority. See [lockInput].
+  /// A count rather than a flag so overlapping countdowns for the same team
+  /// cannot release each other early.
+  int _inputLockDepth = 0;
+  bool get inputLocked => _inputLockDepth > 0;
   TimerComponent? _controlReversalTimer;
 
   /// Team context providing consolidated team information
@@ -92,6 +98,10 @@ class WorldController with AppLogging, Resetable {
   TeamContext get teamContext => _teamContext;
 
   void _updatePaddleThrust(TeamThrust thrust) {
+    if (inputLocked) {
+      world.paddle.setThrust(0.0, 0.0);
+      return;
+    }
     // Apply control reversal if active
     final leftThrust = _controlsReversed
         ? thrust.rightThrust
@@ -103,6 +113,30 @@ class WorldController with AppLogging, Resetable {
     // Update paddle with thrust values (potentially reversed).
     // Parallax is driven by ball Y velocity in RiseTogetherWorld.update() instead.
     world.paddle.setThrust(leftThrust, rightThrust);
+  }
+
+  /// Hold the paddle still for the duration of a countdown, on the authority.
+  ///
+  /// Remote input for a locked team is also dropped before it reaches the
+  /// stream (see `RiseTogetherGameBase.withTeamInputLocked`); this covers
+  /// anything already in it and whatever arrives by another path.
+  ///
+  /// Actions keep being recorded while locked; they are just not applied.
+  void lockInput() {
+    _inputLockDepth++;
+    world.paddle.setThrust(0.0, 0.0);
+    appLog.fine('Input locked for team ${_teamContext.teamId}');
+  }
+
+  /// End a [lockInput] window. Everything recorded while locked is dropped,
+  /// so the paddle starts from rest. A remote player still holding a button
+  /// is back within one input resend.
+  void unlockInput() {
+    if (_inputLockDepth == 0) return;
+    if (--_inputLockDepth > 0) return;
+    actionStream.clearAllActions();
+    world.paddle.setThrust(0.0, 0.0);
+    appLog.fine('Input unlocked for team ${_teamContext.teamId}');
   }
 
   void stopMovement() {

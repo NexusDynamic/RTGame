@@ -18,6 +18,12 @@
     "stay": "Spil videre",
     "leave": "Forlad"
   },
+  "audio": {
+    "musicOn": "Slå musik til",
+    "musicOff": "Slå musik fra",
+    "sfxOn": "Slå lydeffekter til",
+    "sfxOff": "Slå lydeffekter fra"
+  },
   "results": {
     "timeUp": "Tiden er gået!",
     "roundOver": "Runden er slut",
@@ -53,10 +59,21 @@
     "sections": {
       "player": "Spiller",
       "game": "Solospil",
+      "audio": "Lyd",
       "display": "Visning og styring",
       "colors": "Holdfarver",
       "language": "Sprog"
     },
+    "music": {
+      "title": "Musik",
+      "description": "Baggrundsmusik under spillet"
+    },
+    "musicVolume": "Musiklydstyrke",
+    "sfx": {
+      "title": "Lydeffekter",
+      "description": "Nedtælling og spillyde"
+    },
+    "sfxVolume": "Lydstyrke for lydeffekter",
     "nickname": {
       "title": "Kaldenavn",
       "hint": "Vises for andre spillere online"
@@ -87,10 +104,15 @@
   },
   "online": {
     "waitingForHost": "Venter på værten…",
+    "hostAway": {
+      "title": "Værten holder pause",
+      "waiting": "Spillet fortsætter, når værten er tilbage. Du forlader spillet om {} s, hvis ikke."
+    },
     "ended": {
       "hostLeft": "Værten forlod spillet.",
       "connectionLost": "Forbindelsen blev afbrudt.",
-      "removed": "Du blev fjernet fra spillet."
+      "removed": "Du blev fjernet fra spillet.",
+      "hostAway": "Værten var væk for længe."
     },
     "title": "Spil online",
     "mode": {

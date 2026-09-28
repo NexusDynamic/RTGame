@@ -24,6 +24,8 @@ void main() {
         GlobalCountdownState(stateIndex: 1),
         RoundOver(levels: [2, 3], distances: [10.5, 11]),
         Rematch(round: 2, seed: 99),
+        MatchPause(paused: true),
+        MatchPause(paused: false),
       ];
       for (final event in events) {
         final decoded = GameEvent.fromJson(wire(event.toJson()));
@@ -101,6 +103,9 @@ void main() {
         'round': maxRound + 1,
         'seed': 1,
       },
+      'pause flag as a string': {'type': MatchPause.typeName, 'paused': 'yes'},
+      'pause flag as a number': {'type': MatchPause.typeName, 'paused': 1},
+      'pause without a flag': {'type': MatchPause.typeName},
       'level index as double': {
         'type': TeamCountdownTrigger.typeName,
         'teamId': 0,

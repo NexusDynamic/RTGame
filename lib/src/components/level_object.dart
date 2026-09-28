@@ -60,7 +60,11 @@ abstract class LevelObject extends BodyComponent<RiseTogetherGameBase>
 
   @override
   Future<void> onLoad() async {
-    priority = 0;
+    // Below the opponent ghost and previous-best marks (priority 0): a zone's
+    // stripe is opaque and was added after them on every level load, so at
+    // equal priority it hid the translucent ghost entirely. The level backdrop
+    // is drawn by RiseTogetherWorld.render before any child, so it stays under.
+    priority = -1;
     await super.onLoad();
 
     if (spritePath != null) {

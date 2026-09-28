@@ -79,8 +79,26 @@ class OpponentGhost extends PositionComponent
         ..style = PaintingStyle.fill,
     );
 
+    // Unfiltered light outlines. The greyed, 35% ghost alone all but vanishes
+    // over a control-reversal zone's yellow/black stripe.
+    _ball.add(
+      CircleComponent(radius: GameGeometry.ballRadius, paint: _outlinePaint()),
+    );
+    _paddleOutline = RectangleComponent(
+      size: _paddle.size,
+      paint: _outlinePaint(),
+    );
+    _paddle.add(_paddleOutline);
+
     addAll([_ball, _paddle]);
   }
+
+  late final RectangleComponent _paddleOutline;
+
+  static Paint _outlinePaint() => Paint()
+    ..color = const Color(0x99FFFFFF)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = GameGeometry.ballRadius * 0.25;
 
   @override
   void update(double dt) {
@@ -118,6 +136,7 @@ class OpponentGhost extends PositionComponent
         GameGeometry.paddleHalfWidth * 2 * multiplier,
         GameGeometry.paddleThickness,
       );
+      _paddleOutline.size.setFrom(_paddle.size);
     }
   }
 

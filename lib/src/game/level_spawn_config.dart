@@ -143,11 +143,6 @@ class LevelSpawnConfig with AppLogging {
     required RiseTogetherWorld world,
     LevelObjectPool? pool,
   }) {
-    // Reset random with same seed for reproducibility
-    _random = Random(seed);
-
-    final spawned = <SpawnedObject>[];
-
     // Get paddle width multiplier from settings to constrain spawn positions
     final paddleWidthMultiplier = world.appSettings.getDouble(
       'physics.paddle_width_multiplier',
@@ -157,12 +152,11 @@ class LevelSpawnConfig with AppLogging {
       'generateSpawns: levelWidth=$levelWidth, levelHeight=$levelHeight, spawns.length=${spawns.length}, paddleWidthMultiplier=$paddleWidthMultiplier',
     );
 
-    for (final spawn in spawns) {
-      final position = _generatePosition(
-        spawn.constraints,
-        paddleWidthMultiplier,
-      );
-      final size = _getDefaultSize(spawn.objectType, spawn.customParams);
+    final spawned = <SpawnedObject>[];
+    for (final placement in computePlacements(paddleWidthMultiplier)) {
+      final spawn = placement.spawn;
+      final position = placement.position;
+      final size = placement.size;
 
       appLog.info(
         'Spawning ${spawn.objectType} at position=$position, size=$size',
@@ -195,6 +189,82 @@ class LevelSpawnConfig with AppLogging {
     }
 
     return spawned;
+  }
+
+  /// Where every configured object goes, without building any of them.
+  ///
+  /// Pure and deterministic for a given [seed] and [paddleWidthMultiplier] --
+  /// split out of [generateSpawns] so layouts can be tested without a world.
+  /// The draw order is one random pair per spawn, in list order, exactly as it
+  /// always was, so existing levels place identically.
+  List<SpawnPlacement> computePlacements(double paddleWidthMultiplier) {
+    // Reset random with same seed for reproducibility
+    _random = Random(seed);
+    return [
+      for (final spawn in spawns)
+        SpawnPlacement(
+          spawn,
+          _generatePosition(spawn.constraints, paddleWidthMultiplier),
+          defaultSize(spawn.objectType, spawn.customParams),
+        ),
+    ];
+  }
+
+  /// A config whose objects cannot overlap vertically, by construction.
+  ///
+  /// [objects] are laid out bottom to top, one per equal slot across the
+  /// middle 90% of the level. Each object is still placed at random, but only
+  /// within its own slot, shrunk at both ends by its half-height plus [gap], so
+  /// neighbouring objects are always at least `2 * gap` apart. Reversal zones
+  /// span the full width and are centred; everything else keeps the default
+  /// horizontal range (the paddle's reach).
+  factory LevelSpawnConfig.slotted({
+    required int seed,
+    required double levelWidth,
+    required double levelHeight,
+    required List<(String, Map<String, dynamic>?)> objects,
+    double gap = GameGeometry.ballRadius * 2,
+  }) {
+    const bottom = 0.05;
+    const top = 0.95;
+    final slot = (top - bottom) / objects.length;
+    final spawns = <SpawnInstance>[];
+    for (var i = 0; i < objects.length; i++) {
+      final (type, params) = objects[i];
+      final halfHeight = _sizeFor(type, params, levelWidth).y / 2 + gap;
+      final margin = halfHeight / levelHeight;
+      var lo = bottom + slot * i + margin;
+      var hi = bottom + slot * (i + 1) - margin;
+      if (lo > hi) {
+        // Slot too small for the object: pin it to the slot centre. Only a
+        // misconfigured level gets here; the layout test catches it.
+        lo = hi = bottom + slot * (i + 0.5);
+      }
+      final isZone = type == 'control_reversal_zone';
+      spawns.add(
+        SpawnInstance(
+          objectType: type,
+          constraints: isZone
+              ? PlacementConstraints(
+                  minVerticalProgress: lo,
+                  maxVerticalProgress: hi,
+                  minHorizontalPosition: 0.0,
+                  maxHorizontalPosition: 0.0,
+                )
+              : PlacementConstraints(
+                  minVerticalProgress: lo,
+                  maxVerticalProgress: hi,
+                ),
+          customParams: params,
+        ),
+      );
+    }
+    return LevelSpawnConfig(
+      seed: seed,
+      spawns: spawns,
+      levelWidth: levelWidth,
+      levelHeight: levelHeight,
+    );
   }
 
   /// Generate a random position within constraints
@@ -235,11 +305,17 @@ class LevelSpawnConfig with AppLogging {
     return Vector2(x, y);
   }
 
-  /// Get default size for object type
-  Vector2 _getDefaultSize(
+  /// Size an object of [objectType] is spawned at in this level.
+  Vector2 defaultSize(
     String objectType, [
     Map<String, dynamic>? customParams,
-  ]) {
+  ]) => _sizeFor(objectType, customParams, levelWidth);
+
+  static Vector2 _sizeFor(
+    String objectType,
+    Map<String, dynamic>? customParams,
+    double levelWidth,
+  ) {
     if (objectType == 'control_reversal_zone') {
       // The fallback is only reached for configs deserialised without the
       // param; every level in rise_together_levels.dart supplies one. It was
@@ -325,6 +401,15 @@ class LevelSpawnConfig with AppLogging {
           .toList(),
     );
   }
+}
+
+/// Where one configured object goes; see [LevelSpawnConfig.computePlacements].
+class SpawnPlacement {
+  final SpawnInstance spawn;
+  final Vector2 position;
+  final Vector2 size;
+
+  const SpawnPlacement(this.spawn, this.position, this.size);
 }
 
 /// Container for a spawned object and its position

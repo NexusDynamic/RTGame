@@ -66,3 +66,4 @@ flutter:
     - assets/translations/
     - assets/audio/sfx/hi.mp3
     - assets/audio/sfx/lo.mp3
+    - assets/audio/music/lobby.mp3

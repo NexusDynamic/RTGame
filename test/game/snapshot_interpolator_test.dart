@@ -29,9 +29,9 @@ void main() {
   test('blends positions at the delayed render time', () {
     interpolator
       ..add(state(y: 0), 1.0)
-      ..add(state(y: 10), 1.2);
+      ..add(state(y: 4), 1.2);
     // Render time 1.1 is halfway between the two samples.
-    expect(interpolator.sample(1.2)![ballY], closeTo(5, 1e-9));
+    expect(interpolator.sample(1.2)![ballY], closeTo(2, 1e-9));
   });
 
   test('discrete channels take the newer sample', () {
@@ -82,5 +82,73 @@ void main() {
       ..add(state(y: 2), 1.0);
     final y = interpolator.sample(1.1)![ballY];
     expect(y.isFinite, isTrue);
+  });
+
+  group('teleports', () {
+    // Default maxJump is half a level width; a reset back to the start is
+    // several level heights.
+    const reset = 40.0;
+    const paddleY = PhysicsChannels.paddleY;
+    final team1BallY = PhysicsChannels.offsetForTeam(1) + ballY;
+
+    test('a reset snaps to the new pose instead of sweeping to it', () {
+      interpolator
+        ..add(state(y: reset), 1.0)
+        ..add(state(y: 0), 1.2);
+      expect(interpolator.sample(1.2)![ballY], 0);
+    });
+
+    test('a paddle jump alone counts', () {
+      final a = state()..[paddleY] = reset;
+      final b = state()..[paddleY] = 0;
+      interpolator
+        ..add(a, 1.0)
+        ..add(b, 1.2);
+      expect(interpolator.sample(1.2)![paddleY], 0);
+    });
+
+    test('is not projected past the newest sample', () {
+      interpolator
+        ..add(state(y: reset), 1.0)
+        ..add(state(y: 0), 1.1);
+      expect(interpolator.sample(1.23)![ballY], 0);
+    });
+
+    test('only the team that teleported snaps', () {
+      final a = state(y: reset)..[team1BallY] = 0;
+      final b = state(y: 0)..[team1BallY] = 4;
+      interpolator
+        ..add(a, 1.0)
+        ..add(b, 1.2);
+      final out = interpolator.sample(1.2)!;
+      expect(out[ballY], 0);
+      expect(out[team1BallY], closeTo(2, 1e-9));
+    });
+  });
+
+  group('lastSampleTime', () {
+    test('is null before the first sample', () {
+      interpolator.sample(1);
+      expect(interpolator.lastSampleTime, isNull);
+    });
+
+    test('is the newer of the two samples being blended', () {
+      interpolator
+        ..add(state(), 1.0)
+        ..add(state(), 1.2)
+        ..add(state(), 1.4);
+      interpolator.sample(1.2); // render time 1.1
+      expect(interpolator.lastSampleTime, 1.2);
+    });
+
+    test('is the newest while projecting, and resets on clear', () {
+      interpolator
+        ..add(state(), 1.0)
+        ..add(state(), 1.1);
+      interpolator.sample(2);
+      expect(interpolator.lastSampleTime, 1.1);
+      interpolator.clear();
+      expect(interpolator.lastSampleTime, isNull);
+    });
   });
 }

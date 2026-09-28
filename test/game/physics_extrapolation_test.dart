@@ -73,4 +73,24 @@ void main() {
       );
     });
   });
+
+  group('isDiscontinuity', () {
+    test('ordinary per-sample motion is not a teleport', () {
+      expect(isDiscontinuity(dx: 0.05, dy: -0.1, maxJump: 5.0), isFalse);
+    });
+
+    test('a reset back to the start is', () {
+      expect(isDiscontinuity(dx: 0.0, dy: 40.0, maxJump: 5.0), isTrue);
+    });
+
+    test('uses the combined distance, not either axis alone', () {
+      expect(isDiscontinuity(dx: 4.0, dy: 4.0, maxJump: 5.0), isTrue);
+      expect(isDiscontinuity(dx: 3.0, dy: 3.0, maxJump: 5.0), isFalse);
+    });
+
+    test('non-finite input counts as a discontinuity', () {
+      expect(isDiscontinuity(dx: double.nan, dy: 0, maxJump: 5.0), isTrue);
+      expect(isDiscontinuity(dx: 0, dy: double.infinity, maxJump: 5.0), isTrue);
+    });
+  });
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:peer_coordinator/peer_coordinator.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
+import 'package:rise_together_game/src/net/held_inputs.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
 
@@ -84,6 +85,10 @@ class PeerGameSession with AppLogging implements GameSession {
 
   static const Duration inputResendInterval = Duration(milliseconds: 200);
 
+  /// Silence from a player holding a press after which the host releases it:
+  /// five missed resends. See [HeldInputs].
+  static const Duration staleInputAfter = Duration(seconds: 1);
+
   /// Samples per second one peer may send before the excess is dropped. The
   /// honest rate is a handful: one per change plus 5 resends.
   static const int maxInputsPerSecond = 60;
@@ -122,6 +127,11 @@ class PeerGameSession with AppLogging implements GameSession {
   /// Per-sender input budget for the current second, host only.
   final Map<String, int> _inputBudget = {};
   Timer? _budgetReset;
+
+  /// What each player last reported and when, host only.
+  final HeldInputs _heldInputs = HeldInputs(staleAfter: staleInputAfter);
+  final Stopwatch _inputClock = Stopwatch()..start();
+  Timer? _staleInputCheck;
 
   // --- setup --------------------------------------------------------------
 
@@ -408,6 +418,10 @@ class PeerGameSession with AppLogging implements GameSession {
         const Duration(seconds: 1),
         (_) => _inputBudget.clear(),
       );
+      _staleInputCheck = Timer.periodic(
+        inputResendInterval,
+        (_) => _releaseStaleInputs(),
+      );
     } else {
       _subscriptions.add(_physicsStream!.inbox.listen(_onPhysicsSample));
       _subscriptions.add(_session.events.userMessages.listen(_onUserMessage));
@@ -443,13 +457,29 @@ class PeerGameSession with AppLogging implements GameSession {
     if (index is! int || index < 0 || index >= PaddleAction.values.length) {
       return;
     }
+    final action = PaddleAction.values[index];
+    _heldInputs.record(player, action, _inputClock.elapsed);
     _actions.add(
       PlayerActionMessage(
         teamId: player.teamId,
         playerId: player.playerId,
-        action: PaddleAction.values[index],
+        action: action,
       ),
     );
+  }
+
+  void _releaseStaleInputs() {
+    if (_closed) return;
+    for (final player in _heldInputs.takeStale(_inputClock.elapsed)) {
+      appLog.fine('No input from ${player.playerId}; releasing its press');
+      _actions.add(
+        PlayerActionMessage(
+          teamId: player.teamId,
+          playerId: player.playerId,
+          action: PaddleAction.none,
+        ),
+      );
+    }
   }
 
   /// The only message the host accepts from a participant: "I'm ready".
@@ -477,6 +507,7 @@ class PeerGameSession with AppLogging implements GameSession {
   void _onNodeLeft(NodeLeftEvent event) {
     final player = _playerFor(event.node.uId);
     if (player == null) return;
+    _heldInputs.remove(player.nodeId);
     _actions.add(
       PlayerActionMessage(
         teamId: player.teamId,
@@ -623,6 +654,7 @@ class PeerGameSession with AppLogging implements GameSession {
     await _setupSubscription?.cancel();
     _resendTimer?.cancel();
     _budgetReset?.cancel();
+    _staleInputCheck?.cancel();
     for (final subscription in _subscriptions) {
       await subscription.cancel();
     }

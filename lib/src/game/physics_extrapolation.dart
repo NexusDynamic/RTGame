@@ -22,3 +22,20 @@ double projectChannel({
   final projected = value + ((value - previousValue) / span) * lead;
   return projected.isFinite ? projected : value;
 }
+
+/// Whether two consecutive samples are a teleport rather than motion.
+///
+/// Resets and level loads move the ball and paddle straight back to the start,
+/// and the "velocity" between the samples either side of that is the whole
+/// jump over one broadcast period. Projecting it is never right. [dx], [dy] are
+/// the displacement between the two samples, in world units; anything longer
+/// than [maxJump] counts. Non-finite input counts too, since projecting from it
+/// cannot produce anything sensible.
+bool isDiscontinuity({
+  required double dx,
+  required double dy,
+  required double maxJump,
+}) {
+  if (!dx.isFinite || !dy.isFinite) return true;
+  return dx * dx + dy * dy > maxJump * maxJump;
+}

@@ -2,6 +2,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:easy_shared_preferences/easy_shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:rise_together_game/src/services/audio_manager.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
 
 /// Player-facing settings. Changes are saved as they are made.
@@ -93,6 +94,45 @@ class _SettingsScreenState extends State<SettingsScreen> with AppSettings {
                 if (value == null) return;
                 _set(() => appSettings.setDouble('game.round_duration', value));
               },
+            ),
+          ),
+          _Section('settings.sections.audio'.tr()),
+          ValueListenableBuilder(
+            valueListenable: AudioManager.instance.musicEnabled,
+            builder: (context, on, _) => SwitchListTile(
+              title: Text('settings.music.title'.tr()),
+              subtitle: Text('settings.music.description'.tr()),
+              value: on,
+              onChanged: AudioManager.instance.setMusicEnabled,
+            ),
+          ),
+          ValueListenableBuilder(
+            valueListenable: AudioManager.instance.musicVolume,
+            builder: (context, volume, _) => _SliderTile(
+              title: 'settings.musicVolume'.tr(),
+              value: volume,
+              min: 0,
+              max: 1,
+              onChanged: AudioManager.instance.setMusicVolume,
+            ),
+          ),
+          ValueListenableBuilder(
+            valueListenable: AudioManager.instance.sfxEnabled,
+            builder: (context, on, _) => SwitchListTile(
+              title: Text('settings.sfx.title'.tr()),
+              subtitle: Text('settings.sfx.description'.tr()),
+              value: on,
+              onChanged: AudioManager.instance.setSfxEnabled,
+            ),
+          ),
+          ValueListenableBuilder(
+            valueListenable: AudioManager.instance.sfxVolume,
+            builder: (context, volume, _) => _SliderTile(
+              title: 'settings.sfxVolume'.tr(),
+              value: volume,
+              min: 0,
+              max: 1,
+              onChanged: AudioManager.instance.setSfxVolume,
             ),
           ),
           _Section('settings.sections.display'.tr()),

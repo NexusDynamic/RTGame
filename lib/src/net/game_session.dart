@@ -106,6 +106,10 @@ enum SessionEnd {
 
   /// The host removed this device.
   removed,
+
+  /// The host paused the match (its app went to the background) for longer
+  /// than followers wait. See `HostAwayTracker`.
+  hostAway,
 }
 
 /// How players are split across the two teams.
@@ -289,6 +293,10 @@ sealed class GameEvent {
         if (!_isRound(round) || round == 0) return null;
         if (seed is! int || seed < 0 || seed > MatchRules.maxSeed) return null;
         return Rematch(round: round as int, seed: seed);
+      case MatchPause.typeName:
+        final paused = json['paused'];
+        if (paused is! bool) return null;
+        return MatchPause(paused: paused);
       case RoundOver.typeName:
         final levels = json['levels'];
         final distances = json['distances'];
@@ -477,4 +485,24 @@ final class Rematch extends GameEvent {
 
   @override
   Map<String, dynamic> toJson() => {'type': type, 'round': round, 'seed': seed};
+}
+
+/// The host's app went to the background ([paused]) or came back.
+///
+/// Mobile systems suspend a backgrounded app within seconds, so the host
+/// stops the match instead of simulating on. Every device freezes its round
+/// clock until the host is back; followers stop waiting after a while, since
+/// a host could also send this to stall a match forever.
+final class MatchPause extends GameEvent {
+  const MatchPause({required this.paused});
+
+  static const typeName = 'match_pause';
+
+  final bool paused;
+
+  @override
+  String get type => typeName;
+
+  @override
+  Map<String, dynamic> toJson() => {'type': type, 'paused': paused};
 }

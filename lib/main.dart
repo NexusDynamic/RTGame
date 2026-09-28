@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
+import 'package:rise_together_game/src/services/audio_manager.dart';
 import 'package:rise_together_game/src/services/version.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
 import 'package:rise_together_game/src/ui/home_screen.dart';
@@ -23,6 +26,9 @@ Future<void> main() async {
   } catch (e) {
     AppLogger.instance.warning('Wakelock unavailable: $e');
   }
+
+  // Menus are the lobby scene; game screens switch to their own music on top.
+  unawaited(AudioManager.instance.enterMusicScene(MusicScene.lobby));
 
   final language = Settings.instance.appSettings.getString('ui.language');
   runApp(
@@ -64,6 +70,13 @@ class RiseTogetherApp extends StatelessWidget {
         colorSchemeSeed: const Color(0xFF007AFF),
         brightness: Brightness.dark,
         useMaterial3: true,
+      ),
+      // Browsers block audio until the first interaction, so a tap anywhere
+      // starts music that was refused at launch.
+      builder: (context, child) => Listener(
+        onPointerDown: (_) =>
+            unawaited(AudioManager.instance.retryMusicAfterGesture()),
+        child: child,
       ),
       home: const HomeScreen(),
     );

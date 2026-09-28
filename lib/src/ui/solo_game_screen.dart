@@ -11,7 +11,9 @@ import 'package:rise_together_game/src/game/rise_together_game.dart'
     show GameMode, TimeProvider;
 import 'package:rise_together_game/src/game/tournament_manager.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
+import 'package:rise_together_game/src/services/audio_manager.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
+import 'package:rise_together_game/src/ui/audio_toggles.dart';
 import 'package:rise_together_game/src/ui/countdown_overlay.dart';
 import 'package:rise_together_game/src/ui/in_game_ui.dart';
 import 'package:rise_together_game/src/ui/quit_button.dart';
@@ -38,6 +40,7 @@ class _SoloGameScreenState extends State<SoloGameScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(AudioManager.instance.enterMusicScene(MusicScene.game));
     unawaited(_boot());
   }
 
@@ -102,6 +105,7 @@ class _SoloGameScreenState extends State<SoloGameScreen>
   @override
   void dispose() {
     _game?.onTimeUp = null;
+    unawaited(AudioManager.instance.leaveMusicScene(MusicScene.game));
     super.dispose();
   }
 
@@ -126,11 +130,17 @@ class _SoloGameScreenState extends State<SoloGameScreen>
                     CountdownOverlay(g as InteractiveGame),
               },
             ),
-          if (result == null)
+          if (result == null) ...[
             const SafeArea(
               child: Align(alignment: Alignment.topLeft, child: QuitButton()),
-            )
-          else
+            ),
+            const SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: AudioToggles(),
+              ),
+            ),
+          ] else
             ResultsCard(
               title: 'results.timeUp'.tr(),
               highlight: _newBest ? 'results.newBest'.tr() : null,

@@ -12,7 +12,10 @@ import 'package:rise_together_game/src/game/rise_together_game.dart'
     show GameMode, TimeProvider;
 import 'package:rise_together_game/src/game/tournament_manager.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
+import 'package:rise_together_game/src/net/host_away.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
+import 'package:rise_together_game/src/services/audio_manager.dart';
+import 'package:rise_together_game/src/ui/audio_toggles.dart';
 import 'package:rise_together_game/src/ui/countdown_overlay.dart';
 import 'package:rise_together_game/src/ui/in_game_ui.dart';
 import 'package:rise_together_game/src/ui/quit_button.dart';
@@ -43,11 +46,18 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
   StreamSubscription<GameEvent>? _events;
   bool _leaving = false;
 
+  /// Followers: how long we still wait for a host that paused the match.
+  /// One allowance for the whole match, so it outlives each round's game.
+  late final HostAwayTracker _hostAway = HostAwayTracker(
+    onExhausted: () => _onEnded(SessionEnd.hostAway),
+  );
+
   GameSession get _session => widget.session;
 
   @override
   void initState() {
     super.initState();
+    unawaited(AudioManager.instance.enterMusicScene(MusicScene.game));
     _ended = _session.ended.listen(_onEnded);
     if (!_session.isAuthority) {
       // Only the host decides when to play again.
@@ -63,7 +73,10 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
   /// Build a fresh game for [round] and play it.
   void _startRound(int round, {int? seed}) {
     _game?.onRoundOver = null;
-    final game = InteractiveGame(actionManager: ActionStreamManager());
+    _game?.matchPaused.removeListener(_onMatchPaused);
+    final game = InteractiveGame(actionManager: ActionStreamManager())
+      ..matchPaused.addListener(_onMatchPaused);
+    _hostAway.hostAway(false);
     setState(() {
       _round = round;
       _result = null;
@@ -125,6 +138,11 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
     _startRound(next, seed: seed);
   }
 
+  void _onMatchPaused() {
+    if (_session.isAuthority) return;
+    _hostAway.hostAway(_game?.matchPaused.value ?? false);
+  }
+
   void _onEnded(SessionEnd reason) {
     if (!mounted || _leaving) return;
     ScaffoldMessenger.of(
@@ -146,8 +164,11 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
     unawaited(_ended?.cancel());
     unawaited(_events?.cancel());
     _game?.onRoundOver = null;
+    _game?.matchPaused.removeListener(_onMatchPaused);
+    _hostAway.dispose();
     // Covers the system back gesture as well as the buttons.
     if (!_leaving) unawaited(_session.leave());
+    unawaited(AudioManager.instance.leaveMusicScene(MusicScene.game));
     super.dispose();
   }
 
@@ -171,7 +192,7 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
                     CountdownOverlay(g as InteractiveGame),
               },
             ),
-          if (result == null)
+          if (result == null) ...[
             SafeArea(
               child: Align(
                 alignment: Alignment.topLeft,
@@ -182,8 +203,20 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
                   },
                 ),
               ),
-            )
-          else
+            ),
+            const SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: AudioToggles(),
+              ),
+            ),
+            ValueListenableBuilder(
+              valueListenable: _hostAway.remaining,
+              builder: (context, left, _) => left == null
+                  ? const SizedBox.shrink()
+                  : _HostAwayBanner(left),
+            ),
+          ] else
             _buildResults(result),
         ],
       ),
@@ -239,4 +272,40 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       onBackToMenu: _leave,
     );
   }
+}
+
+/// Shown to followers while the host's app is in the background.
+class _HostAwayBanner extends StatelessWidget {
+  const _HostAwayBanner(this.left);
+
+  final Duration left;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Card(
+      margin: const EdgeInsets.all(24),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.pause_circle_outline, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'online.hostAway.title'.tr(),
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'online.hostAway.waiting'.tr(
+                args: [left.inSeconds.clamp(0, 999).toString()],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

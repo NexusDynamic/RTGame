@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flame/camera.dart';
 import 'package:flame/components.dart' hide Timer;
@@ -220,6 +221,11 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   /// Smooths the authority's state for display, on followers.
   final SnapshotInterpolator _interpolator = SnapshotInterpolator();
 
+  /// Per team, when (on [_nowSeconds]'s clock) this follower loaded a new
+  /// level. Samples that arrived by then describe the previous level; applied
+  /// in the new one they flashed whatever sat at that height for a frame.
+  final Map<int, double> _teamLevelLoadedAt = {};
+
   // Reused across every apply tick — avoids 2 Vector2 allocations per frame.
   final Vector2 _physicsApplyVec = Vector2.zero();
 
@@ -249,10 +255,13 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   ) async {
     _inputLockedTeams.add(teamId);
     actionManager.getTeamStream(teamId)?.clearAllActions();
+    final controller = _controllerForTeam(teamId);
+    controller?.lockInput();
     try {
       return await body();
     } finally {
       _inputLockedTeams.remove(teamId);
+      controller?.unlockInput();
     }
   }
 
@@ -278,6 +287,98 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   Completer<void>? _awaitingStart;
 
   bool get _isOnlineFollower => session != null && !_isAuthoritativePhysics;
+
+  // --- backgrounding (online) -----------------------------------------------
+  //
+  // Flutter stops drawing frames for a hidden app (minimised, a background
+  // tab, a phone's home screen), and Flame only updates on frames. On the
+  // host that froze physics for every player. Two remedies, by platform:
+  //
+  // - Desktop and web keep running Dart timers, so the host keeps simulating
+  //   from one ([_driveIfStalled]) without drawing anything.
+  // - Phones suspend the app within seconds, so the host pauses the match for
+  //   everyone instead ([MatchPause]).
+
+  /// The match is frozen because the host's app is in the background. Set on
+  /// the host by [AppLifecycleState.paused], on followers by [MatchPause].
+  final ValueNotifier<bool> matchPaused = ValueNotifier(false);
+
+  AppLifecycleListener? _lifecycle;
+  Timer? _backgroundDriver;
+
+  /// Wall clock for spotting stalled frames; [_lastUpdateAt] is on it.
+  final Stopwatch _loopClock = Stopwatch()..start();
+  double _lastUpdateAt = 0;
+
+  /// The driver simulated since the last real frame, so that frame's dt,
+  /// which spans the whole stall, overlaps time already simulated.
+  bool _drivenSinceFrame = false;
+  bool _driving = false;
+
+  /// How often the host checks that frames are still coming.
+  static const Duration backgroundDriverInterval = Duration(milliseconds: 50);
+
+  /// Frames this late count as stopped.
+  static const double _stallSeconds = 0.1;
+
+  /// Most the driver simulates per check. A background browser tab runs
+  /// timers about once a second, so this covers it; any longer gap (a laptop
+  /// asleep) only advances the round clock.
+  static const double _maxCatchUpSeconds = 2.0;
+
+  double get _loopNow => _loopClock.elapsedMicroseconds / 1e6;
+
+  /// Online: start watching for this device going to the background.
+  void _watchBackground() {
+    _lifecycle ??= AppLifecycleListener(onStateChange: _onLifecycleChange);
+    _backgroundDriver?.cancel();
+    _backgroundDriver = _isAuthoritativePhysics
+        ? Timer.periodic(backgroundDriverInterval, (_) => _driveIfStalled())
+        : null;
+  }
+
+  void _onLifecycleChange(AppLifecycleState state) {
+    if (!_isAuthoritativePhysics || session == null) return;
+    // Only Android and iOS report paused; see the note above.
+    if (state == AppLifecycleState.paused &&
+        isGameRunning &&
+        !matchPaused.value) {
+      _setMatchPaused(true);
+    } else if (state == AppLifecycleState.resumed && matchPaused.value) {
+      _setMatchPaused(false);
+    }
+  }
+
+  void _setMatchPaused(bool paused) {
+    appLog.info(paused ? 'Host backgrounded: pausing' : 'Host back: resuming');
+    matchPaused.value = paused;
+    broadcastEvent(MatchPause(paused: paused));
+  }
+
+  /// Host: simulate the time frames have not, when they stop coming.
+  void _driveIfStalled() {
+    if (!isLoaded || isPaused || !isGameRunning || matchPaused.value) return;
+    // Nothing to catch up on before the first frame.
+    if (_lastUpdateAt == 0) return;
+    final now = _loopNow;
+    final gap = now - _lastUpdateAt;
+    if (gap < _stallSeconds) return;
+    final simulated = math.min(gap, _maxCatchUpSeconds);
+    _driving = true;
+    try {
+      var left = simulated;
+      while (left > 1e-6 && isGameRunning) {
+        final step = math.min(left, maxPhysicsStep);
+        update(step);
+        left -= step;
+      }
+    } finally {
+      _driving = false;
+    }
+    if (gap > simulated && isGameRunning) _advanceRound(gap - simulated);
+    _lastUpdateAt = now;
+    _drivenSinceFrame = true;
+  }
 
   RiseTogetherGameBase({required this.actionManager})
     // box2d v3 takes gravity and the pixel scale at construction. The worlds
@@ -421,6 +522,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
           ..add(session.physics.listen(_handleIncomingPhysicsState))
           ..add(session.events.listen(_handleGameEvent));
       }
+      _watchBackground();
     }
 
     // Team streams must exist before the first action is sent.
@@ -596,10 +698,14 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       appLog.warning('Attempted to send action but game not configured');
       return;
     }
-    // Block input during countdown
-    if (countdownSystem.isActive) return;
-    // Block input when game is not running
-    if (!isGameRunning) return;
+    // Presses are blocked during a countdown and while the game is stopped.
+    // A release always goes through: online, the client re-sends its current
+    // action, so a swallowed release kept re-sending a press the player had
+    // let go of, and the paddle drove itself from GO.
+    if (action != PaddleAction.none &&
+        (countdownSystem.isActive || !isGameRunning)) {
+      return;
+    }
 
     final assignment = _actionProvider!.currentPlayerAssignment;
     _actionProvider!.networkBridge.sendAction(
@@ -1038,9 +1144,22 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   void update(double dt) {
     if (!isLoaded) return;
 
+    var step = dt;
+    final now = _loopNow;
+    if (_drivenSinceFrame && !_driving) {
+      // The first frame back spans the whole stall; the driver has already
+      // simulated all but the last moments of it.
+      _drivenSinceFrame = false;
+      step = math.min(step, now - _lastUpdateAt);
+    }
+    _lastUpdateAt = now;
+
+    // Frozen while the host is away: no physics, no clock.
+    if (matchPaused.value) return;
+
     // Physics gets a bounded step; the round clock below still gets the real
     // dt, so a stalled device's round ends on wall time rather than drifting.
-    super.update(boundPhysicsStep(dt));
+    super.update(boundPhysicsStep(step));
     if (!_isAuthoritativePhysics) {
       for (final worldController in worldControllers.values) {
         worldController.stopMovement();
@@ -1049,9 +1168,14 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     } else {
       _updateCurrentBitflags();
       // The step's own dt rate-limits the broadcast, not wall time.
-      _physicsBroadcaster?.broadcastOnChange(dt);
+      _physicsBroadcaster?.broadcastOnChange(step);
     }
 
+    _advanceRound(step);
+  }
+
+  /// Run the round clock, distances and the end-of-round check for [dt].
+  void _advanceRound(double dt) {
     timeProvider.updateTime(dt);
     tournamentManager.updateRoundTime(timeProvider.elapsedTime);
     _updateDistanceTracking();
@@ -1165,6 +1289,8 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
           final start = _awaitingStart;
           if (start != null && !start.isCompleted) start.complete();
         }
+      case MatchPause(:final paused):
+        matchPaused.value = paused;
       case RoundOver():
         onRoundOver?.call(event);
       case Rematch():
@@ -1224,6 +1350,8 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       return;
     }
 
+    // Anything already buffered for this team is the previous level's pose.
+    _teamLevelLoadedAt[teamId] = _nowSeconds();
     controller.setLevelIndex(levelIndex);
     final newLevel = controller.currentLevel;
     Future.microtask(() async {
@@ -1377,7 +1505,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     pauseEngineInternal();
   }
 
-  Future<void> _clearStateBuffer() async => _interpolator.clear();
+  Future<void> _clearStateBuffer() async {
+    _interpolator.clear();
+    _teamLevelLoadedAt.clear();
+  }
 
   Future<void> resumeGame() async {
     if (!isConfigured) return;
@@ -1542,7 +1673,22 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         continue;
       }
 
+      // Still the previous level's pose: hold the local loadLevel pose until
+      // the authority's first sample from after the load comes up.
+      final loadedAt = _teamLevelLoadedAt[teamId];
+      final sampledAt = _interpolator.lastSampleTime;
+      if (loadedAt != null && sampledAt != null && sampledAt <= loadedAt) {
+        continue;
+      }
+
       double channel(int index) => state[offset + index];
+
+      // Before the pose: a reshape touches the body, and the pose must be the
+      // last thing written this frame. Synchronizes obstacle effects on the
+      // paddle width.
+      world.paddle.syncWidthMultiplier(
+        channel(PhysicsChannels.paddleWidthMultiplier),
+      );
 
       _physicsApplyVec.setValues(
         channel(PhysicsChannels.ballX),
@@ -1560,11 +1706,6 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       );
       world.paddle.setPosition(_physicsApplyVec);
       world.paddle.setAngle(channel(PhysicsChannels.paddleAngle));
-
-      // Synchronizes obstacle effects on the paddle width.
-      world.paddle.syncWidthMultiplier(
-        channel(PhysicsChannels.paddleWidthMultiplier),
-      );
 
       final leftBitflags = channel(PhysicsChannels.leftBitflags).toInt();
       final rightBitflags = channel(PhysicsChannels.rightBitflags).toInt();
@@ -1600,6 +1741,8 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   void onRemove() {
     _cancelSessionSubscriptions();
     onRoundOver = null;
+    _backgroundDriver?.cancel();
+    _lifecycle?.dispose();
 
     // The countdown owns a Timer.periodic that nothing else cancels; left
     // running it outlives the game and ticks through a torn-down world.

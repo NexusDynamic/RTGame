@@ -68,6 +68,20 @@ mixin class AppSettings {
           ],
         ),
         GroupConfig(
+          key: 'audio',
+          items: [
+            /// Background music during games.
+            BoolSetting(key: 'music_enabled', defaultValue: true),
+
+            /// Sound effects (countdown beeps).
+            BoolSetting(key: 'sfx_enabled', defaultValue: true),
+
+            /// Slider positions, 0 to 1. AudioManager maps them to gain.
+            DoubleSetting(key: 'music_volume', defaultValue: 0.7),
+            DoubleSetting(key: 'sfx_volume', defaultValue: 1.0),
+          ],
+        ),
+        GroupConfig(
           key: 'player',
           items: [
             /// Name shown to other players online.

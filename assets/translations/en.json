@@ -18,6 +18,12 @@
     "stay": "Keep playing",
     "leave": "Leave"
   },
+  "audio": {
+    "musicOn": "Turn music on",
+    "musicOff": "Turn music off",
+    "sfxOn": "Turn sound effects on",
+    "sfxOff": "Turn sound effects off"
+  },
   "results": {
     "timeUp": "Time's up!",
     "roundOver": "Round over",
@@ -53,10 +59,21 @@
     "sections": {
       "player": "Player",
       "game": "Solo game",
+      "audio": "Sound",
       "display": "Display & controls",
       "colors": "Team colours",
       "language": "Language"
     },
+    "music": {
+      "title": "Music",
+      "description": "Background music during games"
+    },
+    "musicVolume": "Music volume",
+    "sfx": {
+      "title": "Sound effects",
+      "description": "Countdown and game sounds"
+    },
+    "sfxVolume": "Sound effects volume",
     "nickname": {
       "title": "Nickname",
       "hint": "Shown to other players online"
@@ -87,10 +104,15 @@
   },
   "online": {
     "waitingForHost": "Waiting for the host…",
+    "hostAway": {
+      "title": "The host stepped away",
+      "waiting": "The game continues when they are back. Leaving in {} s if not."
+    },
     "ended": {
       "hostLeft": "The host left the game.",
       "connectionLost": "Connection lost.",
-      "removed": "You were removed from the game."
+      "removed": "You were removed from the game.",
+      "hostAway": "The host was away too long."
     },
     "title": "Play online",
     "mode": {
