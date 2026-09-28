@@ -22,9 +22,8 @@ import 'package:rise_together_game/src/game/overlay_port.dart';
 import 'package:rise_together_game/src/game/physics_channels.dart';
 import 'package:rise_together_game/src/game/player_bitflags.dart';
 import 'package:rise_together_game/src/game/snapshot_interpolator.dart';
-import 'package:rise_together_game/src/game/rise_together_levels.dart'
-    show RiseTogetherLevel;
 import 'package:rise_together_game/src/game/tournament_manager.dart';
+import 'package:rise_together_game/src/game/viewport_layout.dart';
 import 'package:rise_together_game/src/game/world_controller.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/models/team_context.dart';
@@ -975,35 +974,24 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     ..paint.style = overlay ? PaintingStyle.fill : PaintingStyle.stroke
     ..paint.blendMode = overlay ? BlendMode.color : BlendMode.srcOver;
 
-  Vector2 alignedVector({
-    required double longMultiplier,
-    double shortMultiplier = 1.0,
-  }) {
-    return !verticalOrientation
-        ? Vector2(canvasSize.x * longMultiplier, canvasSize.y * shortMultiplier)
-        : Vector2(
-            canvasSize.x * shortMultiplier,
-            canvasSize.y * longMultiplier,
-          );
-  }
+  /// Where [pos]'s camera draws on the current canvas.
+  ///
+  /// Single-view: one camera, the whole canvas. The viewport width is the
+  /// full canvas either way; what changes is the height, and therefore how
+  /// much of the climb is visible.
+  ViewportLayout viewportLayoutFor(TeamDisplayPosition pos) =>
+      ViewportLayout.forTeam(
+        canvas: canvasSize,
+        pos: pos,
+        singleView: _singleViewOpponent,
+        vertical: verticalOrientation,
+      );
 
   CameraComponent _buildCamera(
     RiseTogetherWorld world,
     TeamDisplayPosition pos,
   ) {
-    // Single-view: one camera, the whole canvas. The viewport width is the
-    // full canvas either way; what changes is the height, and therefore how
-    // much of the climb is visible.
-    final viewportSize = alignedVector(
-      longMultiplier: _singleViewOpponent ? 1.0 : 1 / 2,
-    );
-    final zoomLevel = viewportSize.x / RiseTogetherLevel.horizontalWidth;
-    final cameraPos = _singleViewOpponent
-        ? Vector2.zero()
-        : alignedVector(
-            longMultiplier: pos == TeamDisplayPosition.left ? 0.0 : 0.5,
-            shortMultiplier: 0.0,
-          );
+    final layout = viewportLayoutFor(pos);
 
     final List<RectangleComponent> cameraOverlays = [];
     RectangleComponent? cameraOverlay;
@@ -1012,21 +1000,41 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     // split view. The single view has no such viewport; individual mode hides
     // the ghost instead (see InteractiveGame).
     if (!_singleViewOpponent && pos == TeamDisplayPosition.right) {
-      cameraOverlay = viewportRimGenerator(viewportSize, overlay: true);
+      cameraOverlay = viewportRimGenerator(layout.size, overlay: true);
       cameraOverlays.add(cameraOverlay);
     }
 
     final worldCamera =
         CameraComponent(
             world: world,
-            viewport: FixedSizeViewport(viewportSize.x, viewportSize.y)
-              ..position = cameraPos
+            viewport: FixedSizeViewport(layout.size.x, layout.size.y)
+              ..position = layout.position
               ..addAll(cameraOverlays),
           )
           ..viewfinder.anchor = Anchor.center
-          ..viewfinder.zoom = zoomLevel;
+          ..viewfinder.zoom = layout.zoom;
     world.setWorldCamera(worldCamera, cameraOverlay: cameraOverlay);
     return worldCamera;
+  }
+
+  /// Refit every camera to the new canvas. The viewports are fixed-size, so
+  /// without this a resized window keeps the old layout and the arena spills
+  /// off screen (or leaves a gap) while the Flutter overlays reflow.
+  @override
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
+    for (final MapEntry(key: pos, value: controller)
+        in worldControllers.entries) {
+      final world = controller.world;
+      if (!world.hasWorldCamera) continue;
+      final layout = viewportLayoutFor(pos);
+      final camera = world.worldCamera;
+      camera.viewport
+        ..size = layout.size
+        ..position = layout.position;
+      camera.viewfinder.zoom = layout.zoom;
+      world.applyViewportSize(layout.size);
+    }
   }
 
   Future<void> _buildComponents(WorldController worldController) async {

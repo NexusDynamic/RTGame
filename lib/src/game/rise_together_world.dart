@@ -192,6 +192,22 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     _viewportOverlay = cameraOverlay;
   }
 
+  /// Resize what fills this world's viewport after the viewport itself was
+  /// resized to [size]: the blackout rectangle and the starfield.
+  void applyViewportSize(Vector2 size) {
+    _viewportOverlay?.size = size;
+    // parallax is late: unset until onLoad, which sizes it from the current
+    // canvas anyway.
+    if (!isLoaded) return;
+    final backdrop = parallax;
+    if (backdrop != null) {
+      backdrop.size = size;
+      // An explicitly sized ParallaxComponent ignores game resizes, and
+      // setting its size alone does not re-lay-out the layers.
+      backdrop.parallax?.resize(size);
+    }
+  }
+
   void blackout() {
     if (_viewportOverlay == null) {
       appLog.warning(
@@ -723,11 +739,8 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     // in the split view, the whole canvas in the single view. Sized wrong, the
     // starfield either tiles short of the viewport edge or scrolls at the
     // wrong apparent rate.
-    final parallaxSize = gameRef.singleViewOpponent
-        ? Vector2(gameRef.size.x, gameRef.size.y)
-        : gameRef.verticalOrientation
-        ? Vector2(gameRef.size.x, gameRef.size.y / 2)
-        : Vector2(gameRef.size.x / 2, gameRef.size.y);
+    // Kept matched on resize by applyViewportSize.
+    final parallaxSize = gameRef.viewportLayoutFor(pos).size;
 
     // The opponent's world has no camera in the single view, so its backdrop
     // would never be drawn -- skip the four image layers rather than load them
