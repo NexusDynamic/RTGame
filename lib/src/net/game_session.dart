@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
 
@@ -21,8 +22,9 @@ import 'package:rise_together_game/src/net/player_assignment.dart';
 ///
 /// - No free text crosses the wire for display. Countdown messages carry a
 ///   level index and each device renders its own translated string.
-/// - Nothing received is persisted. [MatchRules] is applied in memory for the
-///   one match, never written to the player's settings.
+/// - Nothing received is persisted. [MatchRules] and [customLevels] are
+///   applied in memory for the one match, never written to the player's
+///   settings or level library.
 /// - Implementations must fill in who sent an input from the transport's
 ///   authenticated sender id, never from the message body (see
 ///   [PlayerActionMessage]).
@@ -45,6 +47,10 @@ abstract class GameSession {
 
   /// The rules the authority chose for this match.
   MatchRules get rules;
+
+  /// The authority's own levels, when the match is played on them; null for
+  /// the built-in levels. Decoded by `CustomLevelPack.fromWire`.
+  CustomLevelPack? get customLevels;
 
   // --- followers -> authority ----------------------------------------------
 

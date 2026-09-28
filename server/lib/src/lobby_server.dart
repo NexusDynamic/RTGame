@@ -281,7 +281,11 @@ class LobbyServer {
     return room;
   }
 
-  MatchFound _credentialsFor(Room room, {required bool host}) {
+  MatchFound _credentialsFor(
+    Room room, {
+    required bool host,
+    required bool custom,
+  }) {
     final ice = <IceServer>[
       if (config.stunUrls.isNotEmpty) IceServer(urls: config.stunUrls),
       if (config.turnUrls.isNotEmpty)
@@ -305,6 +309,7 @@ class LobbyServer {
       mode: room.mode,
       players: room.players,
       iceServers: ice,
+      custom: custom,
     );
   }
 

@@ -3,10 +3,21 @@ import 'package:flutter/material.dart';
 
 /// Leaves the current game after asking the player to confirm.
 class QuitButton extends StatelessWidget {
-  const QuitButton({super.key, this.onQuit});
+  const QuitButton({
+    super.key,
+    this.onQuit,
+    this.leaveScreen = true,
+    this.message,
+  });
+
+  /// Replaces the default "progress will be lost" warning.
+  final String? message;
 
   /// Runs before the screen is popped, e.g. to leave an online session.
   final Future<void> Function()? onQuit;
+
+  /// False keeps the screen, e.g. to show the results of an untimed run.
+  final bool leaveScreen;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -20,7 +31,7 @@ class QuitButton extends StatelessWidget {
           context: context,
           builder: (context) => AlertDialog(
             title: Text('game.quitTitle'.tr()),
-            content: Text('game.quitMessage'.tr()),
+            content: Text(message ?? 'game.quitMessage'.tr()),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -35,7 +46,7 @@ class QuitButton extends StatelessWidget {
         );
         if (leave != true) return;
         await onQuit?.call();
-        navigator.pop();
+        if (leaveScreen) navigator.pop();
       },
     ),
   );

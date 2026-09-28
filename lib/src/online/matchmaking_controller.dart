@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:peer_coordinator/websocket.dart' show HubCredentials;
 import 'package:rise_together_lobby/protocol.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/peer_game_session.dart';
 import 'package:rise_together_game/src/online/lobby_client.dart';
@@ -20,20 +21,28 @@ final class Admitting extends MatchmakingState {
   const Admitting();
 }
 
-/// In the lobby, gathering players. [code] is set for a private room.
+/// In the lobby, gathering players. [code] is set for a private room, and
+/// [custom] when the match will be played on the host's own levels.
 final class Gathering extends MatchmakingState {
-  const Gathering({required this.joined, required this.players, this.code});
+  const Gathering({
+    required this.joined,
+    required this.players,
+    this.code,
+    this.custom = false,
+  });
 
   final int joined;
   final int players;
   final String? code;
+  final bool custom;
 }
 
 /// Matched; connecting to the other players.
 final class ConnectingToPlayers extends MatchmakingState {
-  const ConnectingToPlayers({required this.host});
+  const ConnectingToPlayers({required this.host, this.custom = false});
 
   final bool host;
+  final bool custom;
 }
 
 /// Connected and set up: ready to play.
@@ -93,10 +102,14 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
   }
 
   /// Ask the lobby for a match and follow it through.
+  ///
+  /// [customLevels] are this player's levels for a custom-levels request;
+  /// they are sent to the others only if this player ends up hosting.
   Future<void> start({
     required ClientMessage request,
     required String nickname,
     required double roundDurationSeconds,
+    CustomLevelPack? customLevels,
   }) async {
     try {
       final token = await lobby.admit();
@@ -110,7 +123,7 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
       final match = await _awaitMatch(connection, request);
       if (match == null || _cancelled) return;
 
-      _set(ConnectingToPlayers(host: match.host));
+      _set(ConnectingToPlayers(host: match.host, custom: match.custom));
       final session = _pending = await PeerGameSession.connect(
         transport: RtcTransportConfig(
           hubUri: lobby.socketUri(match.path),
@@ -143,6 +156,8 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
           ),
           seed: Random.secure().nextInt(MatchRules.maxSeed),
         ),
+        hostLevels: match.custom ? customLevels : null,
+        customLevels: match.custom,
       );
       if (_cancelled) return;
       _pending = null;
@@ -174,16 +189,31 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
     ClientMessage request,
   ) async {
     _set(switch (request) {
-      QuickMatch(:final players) ||
-      CreateRoom(:final players) => Gathering(joined: 0, players: players),
+      QuickMatch(:final players, :final custom) ||
+      CreateRoom(
+        :final players,
+        :final custom,
+      ) => Gathering(joined: 0, players: players, custom: custom),
       JoinRoom() => const Gathering(joined: 0, players: minPlayers),
     });
     final done = Completer<MatchFound?>();
     final subscription = connection.messages.listen(
       (message) {
         switch (message) {
-          case Waiting(:final joined, :final players, :final code):
-            _set(Gathering(joined: joined, players: players, code: code));
+          case Waiting(
+            :final joined,
+            :final players,
+            :final code,
+            :final custom,
+          ):
+            _set(
+              Gathering(
+                joined: joined,
+                players: players,
+                code: code,
+                custom: custom,
+              ),
+            );
           case MatchFound():
             if (!done.isCompleted) done.complete(message);
           case LobbyError(:final code):

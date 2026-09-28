@@ -108,10 +108,12 @@ class InGameUI extends StatelessWidget
     double screenHeight,
   ) {
     final currentPlayerTeamId = _getCurrentPlayerTeamId();
-    const timeTextLabel = Text(
-      'Time Remaining',
+    final timeTextLabel = Text(
+      game.timeProvider.isTimed
+          ? 'inGame.timeRemaining'.tr()
+          : 'inGame.timeElapsed'.tr(),
       textAlign: TextAlign.center,
-      style: TextStyle(
+      style: const TextStyle(
         backgroundColor: Color.fromARGB(150, 0, 0, 0),
         color: Color.fromARGB(200, 255, 255, 255),
         fontSize: 14,

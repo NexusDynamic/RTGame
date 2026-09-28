@@ -130,7 +130,9 @@ void main() {
     test('client messages round trip and junk is rejected', () {
       for (final m in const <ClientMessage>[
         QuickMatch(mode: LobbyMode.versus, players: 4),
+        QuickMatch(mode: LobbyMode.versus, players: 2, custom: true),
         CreateRoom(mode: LobbyMode.coop, players: 2),
+        CreateRoom(mode: LobbyMode.coop, players: 3, custom: true),
         JoinRoom(code: 'ABC234'),
       ]) {
         expect(
@@ -145,6 +147,8 @@ void main() {
         {'t': 'quick', 'mode': 'chaos', 'players': 2},
         {'t': 'join', 'code': 'abc234'},
         {'t': 'join', 'code': 'ABC10O'},
+        {'t': 'quick', 'mode': 'coop', 'players': 2, 'custom': 'yes'},
+        {'t': 'create', 'mode': 'coop', 'players': 2, 'custom': 1},
         {'t': 'admin'},
       ]) {
         expect(ClientMessage.fromJson(junk), isNull, reason: '$junk');
@@ -185,6 +189,42 @@ void main() {
       };
       expect(ServerMessage.fromJson(match('0' * 32)), isA<MatchFound>());
       expect(ServerMessage.fromJson(match('../../etc')), isNull);
+    });
+
+    test('the custom-levels flag defaults to false and must be a bool', () {
+      final plain = ClientMessage.fromJson({
+        't': 'quick',
+        'mode': 'coop',
+        'players': 2,
+      });
+      expect((plain! as QuickMatch).custom, isFalse);
+      final match = {
+        't': 'match',
+        'room': '0' * 32,
+        'secret': 's',
+        'host': false,
+        'mode': 'coop',
+        'players': 2,
+        'ice': [],
+      };
+      expect((ServerMessage.fromJson(match)! as MatchFound).custom, isFalse);
+      expect(
+        (ServerMessage.fromJson({...match, 'custom': true})! as MatchFound)
+            .custom,
+        isTrue,
+      );
+      expect(ServerMessage.fromJson({...match, 'custom': 'true'}), isNull);
+      expect(
+        (ServerMessage.fromJson({
+                  't': 'waiting',
+                  'joined': 1,
+                  'players': 2,
+                  'custom': true,
+                })!
+                as Waiting)
+            .custom,
+        isTrue,
+      );
     });
   });
 

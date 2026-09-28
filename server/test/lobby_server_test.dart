@@ -209,6 +209,37 @@ void main() {
       expect(server.roomCount, 0);
     });
 
+    test('custom-level players have their own queue', () async {
+      final (a, qa) = await lobby();
+      final (b, qb) = await lobby();
+      final (c, qc) = await lobby();
+      send(a, const QuickMatch(mode: LobbyMode.coop, players: 2));
+      send(b, const QuickMatch(mode: LobbyMode.coop, players: 2, custom: true));
+      expect((await next<Waiting>(qa)).custom, isFalse);
+      expect((await next<Waiting>(qb)).custom, isTrue);
+      expect(server.roomCount, 0);
+
+      send(c, const QuickMatch(mode: LobbyMode.coop, players: 2, custom: true));
+      final mb = await next<MatchFound>(qb);
+      final mc = await next<MatchFound>(qc);
+      expect([mb.custom, mc.custom], [true, true]);
+      expect(mb.room, mc.room);
+      expect(server.matchmaker.waitingCount, 1);
+    });
+
+    test('joiners learn a private room is custom before it starts', () async {
+      final (a, qa) = await lobby();
+      final (b, qb) = await lobby();
+      send(a, const CreateRoom(mode: LobbyMode.coop, players: 3, custom: true));
+      final created = await next<Waiting>(qa);
+      expect(created.custom, isTrue);
+
+      send(b, JoinRoom(code: created.code!));
+      final joined = await next<Waiting>(qb);
+      expect(joined.custom, isTrue);
+      expect(joined.joined, 2);
+    });
+
     test('private rooms fill by code, and the creator hosts', () async {
       final (a, qa) = await lobby();
       final (b, qb) = await lobby();

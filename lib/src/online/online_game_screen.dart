@@ -13,6 +13,7 @@ import 'package:rise_together_game/src/game/rise_together_game.dart'
 import 'package:rise_together_game/src/game/tournament_manager.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/host_away.dart';
+import 'package:rise_together_game/src/online/custom_levels_badge.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
 import 'package:rise_together_game/src/services/audio_manager.dart';
 import 'package:rise_together_game/src/ui/audio_toggles.dart';
@@ -210,6 +211,16 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
                 child: AudioToggles(),
               ),
             ),
+            if (_session.customLevels != null)
+              const SafeArea(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 8, top: 64),
+                    child: CustomLevelsBadge(dense: true),
+                  ),
+                ),
+              ),
             ValueListenableBuilder(
               valueListenable: _hostAway.remaining,
               builder: (context, left, _) => left == null

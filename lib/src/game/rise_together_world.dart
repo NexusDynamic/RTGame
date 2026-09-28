@@ -488,11 +488,17 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
   /// Load a new level configuration
   /// Ball and paddle (world components) are reused and repositioned
   /// Walls and obstacles (level components) are recreated
-  Future<void> loadLevel(RiseTogetherLevel newLevel) async {
+  ///
+  /// [rebuild] recreates the level even if it is already loaded, e.g. once
+  /// the round's seed is known.
+  Future<void> loadLevel(
+    RiseTogetherLevel newLevel, {
+    bool rebuild = false,
+  }) async {
     appLog.info('Loading new level: ${newLevel.runtimeType}');
 
     // If the level is the same as the current one, just reset the ball and paddle
-    if (_lastLoadedLevel == newLevel) {
+    if (!rebuild && _lastLoadedLevel == newLevel) {
       appLog.info(
         'Level ${newLevel.runtimeType} is already loaded, resetting ball and paddle',
       );

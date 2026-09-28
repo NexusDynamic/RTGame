@@ -47,7 +47,13 @@ class LevelObjectPool with AppLogging {
     required Vector2 size,
     Map<String, dynamic>? customParams,
   }) {
-    final object = _createObject(objectType, position, size, customParams);
+    final object = createLevelObject(
+      world,
+      objectType,
+      position,
+      size,
+      customParams,
+    );
     _activeObjects.add(object);
     appLog.fine('Created $objectType');
     return object;
@@ -80,58 +86,62 @@ class LevelObjectPool with AppLogging {
     _activeObjects.clear();
     appLog.fine('Cleared level object registry');
   }
+}
 
-  /// Create a new level object instance
-  LevelObject _createObject(
-    String objectType,
-    Vector2 position,
-    Vector2 size,
-    Map<String, dynamic>? customParams,
-  ) {
-    switch (objectType.toLowerCase()) {
-      case 'fatal':
-      case 'fatalobstacle':
-        return FatalObstacle(world, position: position, size: size);
+/// Build a level object from its spawn type string, e.g. `'fatal'`.
+///
+/// The one place type strings become objects: built-in level configs and
+/// custom levels (see `CustomObjectType.spawnType`) both come through here.
+/// Throws [ArgumentError] for an unknown type.
+LevelObject createLevelObject(
+  RiseTogetherWorld world,
+  String objectType,
+  Vector2 position,
+  Vector2 size,
+  Map<String, dynamic>? customParams,
+) {
+  switch (objectType.toLowerCase()) {
+    case 'fatal':
+    case 'fatalobstacle':
+      return FatalObstacle(world, position: position, size: size);
 
-      case 'powerup_width':
-      case 'paddlewidthpowerup':
-        final multiplier =
-            (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 1.3;
-        return PaddleWidthPowerup(
-          world,
-          position: position,
-          size: size,
-          widthMultiplier: multiplier,
-        );
+    case 'powerup_width':
+    case 'paddlewidthpowerup':
+      final multiplier =
+          (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 1.3;
+      return PaddleWidthPowerup(
+        world,
+        position: position,
+        size: size,
+        widthMultiplier: multiplier,
+      );
 
-      case 'powerdown_width':
-      case 'paddlewidthpowerdown':
-        final multiplier =
-            (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 0.7;
-        return PaddleWidthPowerdown(
-          world,
-          position: position,
-          size: size,
-          widthMultiplier: multiplier,
-        );
+    case 'powerdown_width':
+    case 'paddlewidthpowerdown':
+      final multiplier =
+          (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 0.7;
+      return PaddleWidthPowerdown(
+        world,
+        position: position,
+        size: size,
+        widthMultiplier: multiplier,
+      );
 
-      case 'control_reversal':
-      case 'controlreversaltrigger':
-        final duration =
-            (customParams?['duration'] as num?)?.toDouble() ?? 10.0;
-        return ControlReversalTrigger(
-          world,
-          position: position,
-          size: size,
-          duration: duration,
-        );
+    case 'control_reversal':
+    case 'controlreversaltrigger':
+      final duration = (customParams?['duration'] as num?)?.toDouble() ?? 10.0;
+      return ControlReversalTrigger(
+        world,
+        position: position,
+        size: size,
+        duration: duration,
+      );
 
-      case 'control_reversal_zone':
-      case 'controlreversalzone':
-        return ControlReversalZone(world, position: position, size: size);
+    case 'control_reversal_zone':
+    case 'controlreversalzone':
+      return ControlReversalZone(world, position: position, size: size);
 
-      default:
-        throw ArgumentError('Unknown object type: $objectType');
-    }
+    default:
+      throw ArgumentError('Unknown object type: $objectType');
   }
 }

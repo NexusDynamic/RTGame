@@ -2,6 +2,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rise_together_lobby/protocol.dart';
+import 'package:rise_together_game/src/editor/level_library_screen.dart';
+import 'package:rise_together_game/src/levels/level_library.dart';
 import 'package:rise_together_game/src/online/matchmaking_screen.dart';
 
 /// Choose how to play online: quick match, a private room, or a code.
@@ -19,6 +21,19 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
   int _players = 2;
   final _code = TextEditingController();
 
+  /// Levels to play on instead of the built-in ones, if the player chose some.
+  CustomSelection? _custom;
+
+  Future<void> _toggleCustom(bool on) async {
+    if (!on) {
+      setState(() => _custom = null);
+      return;
+    }
+    final selection = await pickCustomLevels(context);
+    if (selection == null || selection.pack == null) return;
+    setState(() => _custom = selection);
+  }
+
   /// Versus needs even teams; co-op takes any size.
   List<int> get _sizes => _mode == LobbyMode.versus ? [2, 4] : [2, 3, 4];
 
@@ -30,8 +45,11 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
 
   void _go(ClientMessage request) => Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          MatchmakingScreen(lobbyUrl: widget.lobbyUrl, request: request),
+      builder: (_) => MatchmakingScreen(
+        lobbyUrl: widget.lobbyUrl,
+        request: request,
+        customLevels: request is JoinRoom ? null : _custom?.pack,
+      ),
     ),
   );
 
@@ -87,17 +105,39 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
                     ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.terrain_outlined),
+                title: Text('online.customLevels'.tr()),
+                subtitle: Text(
+                  _custom == null
+                      ? 'online.customLevelsHelp'.tr()
+                      : 'online.customLevelsChosen'.tr(
+                          args: [_custom!.name, '${_custom!.levels.length}'],
+                        ),
+                ),
+                value: _custom != null,
+                onChanged: _toggleCustom,
+              ),
+              const SizedBox(height: 8),
               FilledButton.icon(
                 icon: const Icon(Icons.travel_explore),
                 label: Text('online.quickMatch'.tr()),
-                onPressed: () =>
-                    _go(QuickMatch(mode: _mode, players: _players)),
+                onPressed: () => _go(
+                  QuickMatch(
+                    mode: _mode,
+                    players: _players,
+                    custom: _custom != null,
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 4, bottom: 12),
                 child: Text(
-                  'online.quickMatchHelp'.tr(),
+                  _custom == null
+                      ? 'online.quickMatchHelp'.tr()
+                      : 'online.quickMatchCustomHelp'.tr(),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall,
                 ),
@@ -105,8 +145,13 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.lock),
                 label: Text('online.createRoom'.tr()),
-                onPressed: () =>
-                    _go(CreateRoom(mode: _mode, players: _players)),
+                onPressed: () => _go(
+                  CreateRoom(
+                    mode: _mode,
+                    players: _players,
+                    custom: _custom != null,
+                  ),
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.only(top: 4),

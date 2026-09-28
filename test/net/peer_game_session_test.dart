@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:peer_coordinator/testing.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/peer_game_session.dart';
@@ -77,6 +78,8 @@ void main() {
     int count, {
     MatchMode mode = MatchMode.versus,
     List<String>? nicknames,
+    CustomLevelPack? hostLevels,
+    bool followersExpectCustom = false,
   }) async {
     final room = 'room-${run++}';
     // Everyone connects at once: roles, not arrival order, decide the host.
@@ -99,11 +102,82 @@ void main() {
             roundDurationSeconds: 60,
             seed: 1234,
           ),
+          hostLevels: hostLevels,
+          customLevels: s == all.first
+              ? hostLevels != null
+              : followersExpectCustom,
           timeout: const Duration(seconds: 10),
         ),
     ]);
     return (all.first, all.skip(1).toList());
   }
+
+  CustomLevelPack pack() => CustomLevelPack.create([
+    CustomLevel.create(
+      heightMultiplier: 4,
+      name: 'secret name',
+      objects: [
+        CustomObject.create(
+          type: CustomObjectType.fatal,
+          x: 1,
+          y: 12,
+          levelHeight: 40,
+        )!,
+      ],
+    )!,
+  ])!;
+
+  group('custom levels', () {
+    test('reach every follower, without names', () async {
+      final (host, followers) = await startMatch(
+        3,
+        hostLevels: pack(),
+        followersExpectCustom: true,
+      );
+      expect(host.customLevels, isNotNull);
+      for (final f in followers) {
+        final level = f.customLevels!.levels.single;
+        expect(level.sameLayout(pack().levels.single), isTrue);
+        expect(level.name, isEmpty);
+      }
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a standard match carries none', () async {
+      final (host, followers) = await startMatch(2);
+      expect(host.customLevels, isNull);
+      expect(followers.single.customLevels, isNull);
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a follower refuses levels the lobby did not announce', () async {
+      await expectLater(
+        startMatch(2, hostLevels: pack()),
+        throwsA(isA<StateError>()),
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('a follower refuses a custom match that sends none', () async {
+      await expectLater(
+        startMatch(2, followersExpectCustom: true),
+        throwsA(isA<StateError>()),
+      );
+    }, timeout: const Timeout(Duration(seconds: 30)));
+
+    final bad = <String, Object?>{
+      'a number': 42,
+      'a map': {'levels': []},
+      'junk': '[1,[',
+      'oversized': '[1,[${'[5,[]],' * 5000}[5,[]]]]',
+      'out of range': '[1,[[5,[[0,9,9]]]]]',
+    };
+    bad.forEach((name, raw) {
+      test('setup rejects $name', () {
+        expect(
+          () => PeerGameSession.setupLevels(raw, expected: true),
+          throwsStateError,
+        );
+      });
+    });
+  });
 
   test('everyone agrees on rules and roster; versus splits teams', () async {
     final (host, followers) = await startMatch(3);

@@ -73,47 +73,54 @@ enum GameMode {
   joint,
 }
 
-/// A provider for tracking round time with countdown functionality.
-/// Counts down from round duration to show time remaining.
+/// A provider for tracking round time.
+///
+/// Timed rounds count down from the round duration. Untimed runs
+/// ([initialize] with null) count up and never complete on their own.
 class TimeProvider extends ChangeNotifier with Resetable {
   double _timeRemaining = 0.0;
-  double _duration = 240.0; // Default 4 minutes
+  double? _duration = 240.0; // Default 4 minutes
   double _elapsedTime = 0.0;
   bool _isComplete = false;
 
   double get timeRemaining => _timeRemaining;
-  double get duration => _duration;
+
+  /// Round length in seconds, or null for an untimed run.
+  double? get duration => _duration;
+  bool get isTimed => _duration != null;
   double get elapsedTime => _elapsedTime;
   bool get isComplete => _isComplete;
 
-  void initialize(double duration) {
+  void initialize(double? duration) {
     _duration = duration;
-    _timeRemaining = duration;
+    _timeRemaining = duration ?? 0.0;
     _elapsedTime = 0.0;
     _isComplete = false;
     _lastNotifiedSecond = -1;
     notifyListeners();
   }
 
-  /// Whole seconds remaining at the last notification. Used to suppress
+  /// Whole seconds shown at the last notification. Used to suppress
   /// redundant rebuilds — see [updateTime].
   int _lastNotifiedSecond = -1;
 
   void updateTime(double dt) {
     if (_isComplete) return;
 
-    _timeRemaining -= dt;
     _elapsedTime += dt;
-
-    if (_timeRemaining <= 0) {
-      _timeRemaining = 0;
-      _elapsedTime = _duration; // Cap at duration
-      _isComplete = true;
+    final duration = _duration;
+    if (duration != null) {
+      _timeRemaining -= dt;
+      if (_timeRemaining <= 0) {
+        _timeRemaining = 0;
+        _elapsedTime = duration; // Cap at duration
+        _isComplete = true;
+      }
     }
 
     // Notify only when the displayed value actually changes. This runs every
     // frame, and the only consumer is a mm:ss label.
-    final currentSecond = _timeRemaining.ceil();
+    final currentSecond = _displaySeconds;
     if (currentSecond != _lastNotifiedSecond || _isComplete) {
       _lastNotifiedSecond = currentSecond;
       notifyListeners();
@@ -122,16 +129,21 @@ class TimeProvider extends ChangeNotifier with Resetable {
 
   @override
   void reset() {
-    _timeRemaining = _duration;
+    _timeRemaining = _duration ?? 0.0;
     _elapsedTime = 0.0;
     _isComplete = false;
     _lastNotifiedSecond = -1;
     notifyListeners();
   }
 
-  String get formattedTime {
-    final totalSeconds = _timeRemaining.ceil();
-    final minutes = (totalSeconds / 60).floor().toString().padLeft(2, '0');
+  int get _displaySeconds =>
+      isTimed ? _timeRemaining.ceil() : _elapsedTime.floor();
+
+  String get formattedTime => formatSeconds(_displaySeconds);
+
+  /// mm:ss, used for both the in-game clock and results.
+  static String formatSeconds(int totalSeconds) {
+    final minutes = (totalSeconds ~/ 60).toString().padLeft(2, '0');
     final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
@@ -278,6 +290,18 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
 
   /// Called when the round timer runs out.
   VoidCallback? onTimeUp;
+
+  /// Authority only: a team reached the top of level [levelIndex] of the
+  /// current sequence.
+  void Function(int teamId, int levelIndex)? onTeamLevelCompleted;
+
+  /// Untimed solo: the player finished the last level of the sequence. The
+  /// result is in [TournamentManager.individualConditionResult].
+  VoidCallback? onSequenceCompleted;
+
+  /// The levels being played, set in [configure] and [startGameDirect].
+  LevelSequence get levelSequence => _levelSequence;
+  LevelSequence _levelSequence = LevelSequence.defaultSequence();
 
   /// Online only: the round's official result, from the authority. Fires on
   /// every device, the authority included.
@@ -490,12 +514,14 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
           : null;
     }
 
-    final levelSequence = LevelSequence.defaultSequence();
-    for (final controller in worldControllers.values) {
-      controller.setLevelSequence(levelSequence);
-    }
-    appLog.info(
-      'Level sequences initialized with ${levelSequence.levelCount} levels',
+    // Online, the authority's own levels when the match is played on them.
+    // Every device builds the same sequence, so level indices on the wire
+    // mean the same thing everywhere.
+    final customLevels = actionProvider.session?.customLevels;
+    _useLevelSequence(
+      customLevels == null
+          ? LevelSequence.defaultSequence()
+          : LevelSequence.custom(customLevels.levels),
     );
 
     for (final controller in worldControllers.values) {
@@ -531,6 +557,16 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     appLog.info('Game configured with action provider');
   }
 
+  void _useLevelSequence(LevelSequence sequence) {
+    _levelSequence = sequence;
+    for (final controller in worldControllers.values) {
+      controller.setLevelSequence(sequence);
+    }
+    appLog.info(
+      'Level sequences initialized with ${sequence.levelCount} levels',
+    );
+  }
+
   void _cancelSessionSubscriptions() {
     for (final subscription in _sessionSubscriptions) {
       subscription.cancel();
@@ -562,14 +598,19 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   /// Start a round.
   ///
   /// - [mode]: individual (opponent hidden) or joint (two teams).
-  /// - [durationSeconds]: round length.
+  /// - [durationSeconds]: round length; null plays untimed (solo only) until
+  ///   the sequence is finished or the player quits.
+  /// - [startLevelIndex]: where in the sequence both teams start.
+  /// - [sequence]: levels to play instead of the configured ones.
   /// - [round] / [trial]: indices recorded with the round's result. A new
   ///   tournament of [trialsPerRound] rounds starts whenever [trial] is 0.
   ///   Online, [round] is also what this device reports ready for.
   /// - [seed]: obstacle layout; defaults to the match's.
   Future<void> startGameDirect({
     required GameMode mode,
-    required double durationSeconds,
+    required double? durationSeconds,
+    int startLevelIndex = 0,
+    LevelSequence? sequence,
     int round = 0,
     int trial = 0,
     int trialsPerRound = 1,
@@ -579,6 +620,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     if (!isConfigured) {
       throw StateError('Game must be configured before starting');
     }
+    if (durationSeconds == null && mode != GameMode.individual) {
+      throw ArgumentError('Only solo games can be untimed');
+    }
+    if (sequence != null) _useLevelSequence(sequence);
 
     _currentRound = round;
     _currentTrial = trial;
@@ -599,6 +644,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         durationSeconds: durationSeconds,
         seed: matchSeed,
       );
+      await _loadStartLevel(startLevelIndex);
       addBlackScreenToNonPlayerWorld();
     } else {
       // Idempotent: leaves individual mode if a previous game set it.
@@ -611,7 +657,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
             matchSeed ?? appSettings.getInt('game.experiment_seed');
         tournamentManager.initialize(
           rounds: trialsPerRound,
-          roundDurationSeconds: durationSeconds,
+          roundDurationSeconds: durationSeconds!,
           seed: seedValue > 0 ? seedValue : null,
         );
       }
@@ -620,11 +666,28 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         tournamentManager.startRound();
       }
 
+      await _loadStartLevel(startLevelIndex);
       removeBlackScreenFromNonPlayerWorld();
       await advanceLevel();
     }
 
     await startGame(skipCountdown: skipCountdown);
+  }
+
+  /// Put both teams on [index] and build it with the round's seed, which is
+  /// only known once the round has started.
+  Future<void> _loadStartLevel(int index) async {
+    final start = index.clamp(0, _levelSequence.levelCount - 1);
+    for (final controller in worldControllers.values) {
+      final teamId = controller.teamContext.teamId;
+      controller.setLevelIndex(start);
+      tournamentManager.setTeamLevelIndex(teamId, start);
+      await controller.world.loadLevel(controller.currentLevel, rebuild: true);
+      distanceTracker.setStartingHeight(
+        teamId,
+        controller.world.ball.startPosition.y,
+      );
+    }
   }
 
   /// Start the game, optionally after the 3-2-1 countdown.
@@ -1388,9 +1451,21 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       distanceAchieved: distanceTracker.getTeamDistance(teamId),
     );
 
+    onTeamLevelCompleted?.call(teamId, currentLevelIndex);
+
     final nextLevelIndex = controller.advanceLevel();
     if (nextLevelIndex == currentLevelIndex) {
-      // Already at the last level.
+      // Already at the last level. Untimed solo ends here; otherwise the team
+      // replays it until time runs out.
+      if (!timeProvider.isTimed &&
+          tournamentManager.isIndividualConditionMode) {
+        // Not during the physics step.
+        Future.microtask(() {
+          if (!isGameRunning) return;
+          completeIndividualCondition();
+          onSequenceCompleted?.call();
+        });
+      }
       return;
     }
 

@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:meta/meta.dart';
 import 'package:peer_coordinator/peer_coordinator.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/held_inputs.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
@@ -103,6 +105,7 @@ class PeerGameSession with AppLogging implements GameSession {
   StreamSubscription<UserMessageEvent>? _setupSubscription;
 
   late final MatchRules _rules;
+  CustomLevelPack? _customLevels;
   late final List<PlayerAssignment> _assignments;
   late final PlayerAssignment _local;
 
@@ -249,18 +252,32 @@ class PeerGameSession with AppLogging implements GameSession {
   /// Wait until the match is ready to play.
   ///
   /// The host waits for everyone to arrive, then assigns teams and creates the
-  /// streams using [hostRules]. Everyone else waits for the host's setup and
-  /// validates it. Throws [TimeoutException] or [StateError] on failure, with
-  /// the session already torn down.
+  /// streams using [hostRules] and, for a custom-levels match, [hostLevels].
+  /// Everyone else waits for the host's setup and validates it.
+  ///
+  /// [customLevels] is what the lobby said about this match. The host must
+  /// supply levels exactly when it is set, and a follower refuses a setup
+  /// that disagrees, so nobody plays custom levels they did not agree to.
+  ///
+  /// Throws [TimeoutException] or [StateError] on failure, with the session
+  /// already torn down.
   Future<void> startMatch({
     required MatchRules hostRules,
+    CustomLevelPack? hostLevels,
+    bool customLevels = false,
     Duration timeout = const Duration(seconds: 60),
   }) async {
     try {
       if (isAuthority) {
-        await _hostSetup(hostRules, _playerCount, timeout);
+        if ((hostLevels != null) != customLevels) {
+          throw StateError('Custom levels do not match the lobby');
+        }
+        await _hostSetup(hostRules, hostLevels, _playerCount, timeout);
       } else {
-        await _participantSetup(await _setup.future.timeout(timeout));
+        await _participantSetup(
+          await _setup.future.timeout(timeout),
+          expectCustomLevels: customLevels,
+        );
       }
       await _setupSubscription?.cancel();
       _setupSubscription = null;
@@ -291,6 +308,7 @@ class PeerGameSession with AppLogging implements GameSession {
 
   Future<void> _hostSetup(
     MatchRules rules,
+    CustomLevelPack? levels,
     int playerCount,
     Duration timeout,
   ) async {
@@ -306,6 +324,7 @@ class PeerGameSession with AppLogging implements GameSession {
 
     final members = _members().values.take(playerCount).toList();
     _rules = rules;
+    _customLevels = levels;
     _assignments = [
       for (var i = 0; i < members.length; i++)
         PlayerAssignment(
@@ -353,13 +372,19 @@ class PeerGameSession with AppLogging implements GameSession {
     await _session.sendUserMessage(matchMessageType, 'match setup', {
       'rules': rules.toJson(),
       'players': [for (final a in _assignments) a.toMap()],
+      'levels': ?levels?.toWire(),
     });
     appLog.info('Hosting match: $rules, ${_assignments.length} players');
   }
 
-  Future<void> _participantSetup(Map<String, dynamic> payload) async {
+  Future<void> _participantSetup(
+    Map<String, dynamic> payload, {
+    required bool expectCustomLevels,
+  }) async {
     final rules = MatchRules.fromJson(payload['rules']);
     if (rules == null) throw StateError('Host sent invalid match rules');
+
+    final levels = setupLevels(payload['levels'], expected: expectCustomLevels);
 
     final rawPlayers = payload['players'];
     if (rawPlayers is! List || rawPlayers.length > maxPlayers) {
@@ -383,12 +408,28 @@ class PeerGameSession with AppLogging implements GameSession {
     }
 
     _rules = rules;
+    _customLevels = levels;
     _assignments = List.unmodifiable(players);
     _local = self.single;
 
     _inputStream = await _awaitStream(inputStreamName);
     _physicsStream = await _awaitStream(physicsStreamName);
     appLog.info('Joined match: $rules as team ${_local.teamId}');
+  }
+
+  /// The custom levels in a host's setup: null when there are none. Throws
+  /// [StateError] if they are invalid, or present when the lobby did not say
+  /// the match was custom (or missing when it did).
+  @visibleForTesting
+  static CustomLevelPack? setupLevels(Object? raw, {required bool expected}) {
+    final levels = raw == null ? null : CustomLevelPack.fromWire(raw);
+    if (raw != null && levels == null) {
+      throw StateError('Host sent invalid custom levels');
+    }
+    if ((levels != null) != expected) {
+      throw StateError('Custom levels do not match the lobby');
+    }
+    return levels;
   }
 
   /// Participants build their streams on the host's command; poll until ours
@@ -563,6 +604,9 @@ class PeerGameSession with AppLogging implements GameSession {
 
   @override
   MatchRules get rules => _rules;
+
+  @override
+  CustomLevelPack? get customLevels => _customLevels;
 
   @override
   void sendAction(PaddleAction action) {

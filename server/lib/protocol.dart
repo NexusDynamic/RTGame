@@ -28,6 +28,11 @@ bool isValidRoomCode(Object? code) =>
 LobbyMode? _mode(Object? value) =>
     LobbyMode.values.where((m) => m.name == value).firstOrNull;
 
+/// The optional custom-levels flag: absent means false, anything but a bool
+/// is invalid (null).
+bool? _custom(Object? value) =>
+    value == null ? false : (value is bool ? value : null);
+
 int? _players(Object? value) =>
     value is int && value >= minPlayers && value <= maxPlayers ? value : null;
 
@@ -44,13 +49,15 @@ sealed class ClientMessage {
       case QuickMatch.type:
         final mode = _mode(json['mode']);
         final players = _players(json['players']);
-        if (mode == null || players == null) return null;
-        return QuickMatch(mode: mode, players: players);
+        final custom = _custom(json['custom']);
+        if (mode == null || players == null || custom == null) return null;
+        return QuickMatch(mode: mode, players: players, custom: custom);
       case CreateRoom.type:
         final mode = _mode(json['mode']);
         final players = _players(json['players']);
-        if (mode == null || players == null) return null;
-        return CreateRoom(mode: mode, players: players);
+        final custom = _custom(json['custom']);
+        if (mode == null || players == null || custom == null) return null;
+        return CreateRoom(mode: mode, players: players, custom: custom);
       case JoinRoom.type:
         final code = json['code'];
         if (!isValidRoomCode(code)) return null;
@@ -62,36 +69,54 @@ sealed class ClientMessage {
 }
 
 /// Match me with strangers.
+///
+/// [custom] asks for a match on player-made levels. Those players have their
+/// own queue, so nobody gets custom levels without asking for them.
 final class QuickMatch extends ClientMessage {
-  const QuickMatch({required this.mode, required this.players});
+  const QuickMatch({
+    required this.mode,
+    required this.players,
+    this.custom = false,
+  });
 
   static const type = 'quick';
 
   final LobbyMode mode;
   final int players;
+  final bool custom;
 
   @override
   Map<String, dynamic> toJson() => {
     't': type,
     'mode': mode.name,
     'players': players,
+    if (custom) 'custom': true,
   };
 }
 
 /// Open a private room; the server replies with its code.
+///
+/// [custom] marks the room as played on the creator's own levels; everyone
+/// who joins is told before the match starts.
 final class CreateRoom extends ClientMessage {
-  const CreateRoom({required this.mode, required this.players});
+  const CreateRoom({
+    required this.mode,
+    required this.players,
+    this.custom = false,
+  });
 
   static const type = 'create';
 
   final LobbyMode mode;
   final int players;
+  final bool custom;
 
   @override
   Map<String, dynamic> toJson() => {
     't': type,
     'mode': mode.name,
     'players': players,
+    if (custom) 'custom': true,
   };
 }
 
@@ -121,10 +146,16 @@ sealed class ServerMessage {
         final joined = json['joined'];
         final players = _players(json['players']);
         final code = json['code'];
-        if (joined is! int || players == null) return null;
+        final custom = _custom(json['custom']);
+        if (joined is! int || players == null || custom == null) return null;
         if (joined < 0 || joined > players) return null;
         if (code != null && !isValidRoomCode(code)) return null;
-        return Waiting(joined: joined, players: players, code: code as String?);
+        return Waiting(
+          joined: joined,
+          players: players,
+          code: code as String?,
+          custom: custom,
+        );
       case MatchFound.type:
         return MatchFound.tryFromJson(json);
       case LobbyError.type:
@@ -138,15 +169,22 @@ sealed class ServerMessage {
   }
 }
 
-/// Still gathering players. [code] is set for a private room.
+/// Still gathering players. [code] is set for a private room, and [custom]
+/// when the match will be played on the host's own levels.
 final class Waiting extends ServerMessage {
-  const Waiting({required this.joined, required this.players, this.code});
+  const Waiting({
+    required this.joined,
+    required this.players,
+    this.code,
+    this.custom = false,
+  });
 
   static const type = 'waiting';
 
   final int joined;
   final int players;
   final String? code;
+  final bool custom;
 
   @override
   Map<String, dynamic> toJson() => {
@@ -154,6 +192,7 @@ final class Waiting extends ServerMessage {
     'joined': joined,
     'players': players,
     if (code != null) 'code': code,
+    if (custom) 'custom': true,
   };
 }
 
@@ -210,6 +249,7 @@ final class MatchFound extends ServerMessage {
     required this.mode,
     required this.players,
     required this.iceServers,
+    this.custom = false,
   });
 
   static const type = 'match';
@@ -226,6 +266,10 @@ final class MatchFound extends ServerMessage {
   final int players;
   final List<IceServer> iceServers;
 
+  /// Played on the host's own levels, which the host sends in the match
+  /// setup. A follower refuses a setup that does not agree with this.
+  final bool custom;
+
   /// Path of the room's signaling hub on the lobby server.
   String get path => '/room/$room';
 
@@ -240,6 +284,7 @@ final class MatchFound extends ServerMessage {
     'mode': mode.name,
     'players': players,
     'ice': [for (final s in iceServers) s.toJson()],
+    if (custom) 'custom': true,
   };
 
   static MatchFound? tryFromJson(Map<String, dynamic> json) {
@@ -249,6 +294,8 @@ final class MatchFound extends ServerMessage {
     final mode = _mode(json['mode']);
     final players = _players(json['players']);
     final ice = json['ice'];
+    final custom = _custom(json['custom']);
+    if (custom == null) return null;
     if (room is! String || !_roomId.hasMatch(room)) return null;
     if (secret is! String || secret.isEmpty || secret.length > 128) return null;
     if (host is! bool || mode == null || players == null) return null;
@@ -266,6 +313,7 @@ final class MatchFound extends ServerMessage {
       mode: mode,
       players: players,
       iceServers: servers,
+      custom: custom,
     );
   }
 }

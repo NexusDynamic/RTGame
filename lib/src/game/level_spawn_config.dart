@@ -126,12 +126,28 @@ class LevelSpawnConfig with AppLogging {
 
   late Random _random;
 
+  /// Exact placements, when the level has no randomness at all.
+  final List<SpawnPlacement>? _fixed;
+
   LevelSpawnConfig({
     required this.seed,
     required this.spawns,
     required this.levelWidth,
     required this.levelHeight,
-  }) {
+  }) : _fixed = null {
+    _random = Random(seed);
+  }
+
+  /// A config that places each object exactly where [placements] say,
+  /// whatever the seed. Used for custom levels, whose author chose every
+  /// position. The paddle-reach clamp of seeded placement does not apply.
+  LevelSpawnConfig.fixed({
+    required List<SpawnPlacement> placements,
+    required this.levelWidth,
+    required this.levelHeight,
+  }) : seed = 0,
+       spawns = [for (final p in placements) p.spawn],
+       _fixed = List.unmodifiable(placements) {
     _random = Random(seed);
   }
 
@@ -174,7 +190,7 @@ class LevelSpawnConfig with AppLogging {
         );
         continue;
       }
-      final object = _createObject(
+      final object = createLevelObject(
         world,
         spawn.objectType,
         position,
@@ -198,6 +214,7 @@ class LevelSpawnConfig with AppLogging {
   /// The draw order is one random pair per spawn, in list order, exactly as it
   /// always was, so existing levels place identically.
   List<SpawnPlacement> computePlacements(double paddleWidthMultiplier) {
+    if (_fixed case final fixed?) return fixed;
     // Reset random with same seed for reproducibility
     _random = Random(seed);
     return [
@@ -330,56 +347,6 @@ class LevelSpawnConfig with AppLogging {
     // Making larger for visibility: 10% instead of 5%
     final baseSize = levelWidth * 0.1;
     return Vector2.all(baseSize);
-  }
-
-  /// Create the appropriate LevelObject instance
-  LevelObject _createObject(
-    RiseTogetherWorld world,
-    String objectType,
-    Vector2 position,
-    Vector2 size,
-    Map<String, dynamic>? customParams,
-  ) {
-    switch (objectType) {
-      case 'fatal':
-        return FatalObstacle(world, position: position, size: size);
-
-      case 'powerup_width':
-        final multiplier =
-            (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 1.3;
-        return PaddleWidthPowerup(
-          world,
-          position: position,
-          size: size,
-          widthMultiplier: multiplier,
-        );
-
-      case 'powerdown_width':
-        final multiplier =
-            (customParams?['widthMultiplier'] as num?)?.toDouble() ?? 0.7;
-        return PaddleWidthPowerdown(
-          world,
-          position: position,
-          size: size,
-          widthMultiplier: multiplier,
-        );
-
-      case 'control_reversal':
-        final duration =
-            (customParams?['duration'] as num?)?.toDouble() ?? 10.0;
-        return ControlReversalTrigger(
-          world,
-          position: position,
-          size: size,
-          duration: duration,
-        );
-
-      case 'control_reversal_zone':
-        return ControlReversalZone(world, position: position, size: size);
-
-      default:
-        throw ArgumentError('Unknown object type: $objectType');
-    }
   }
 
   /// Serialize configuration to JSON

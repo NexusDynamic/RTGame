@@ -1,11 +1,12 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:rise_together_game/src/editor/level_library_screen.dart';
 import 'package:rise_together_game/src/online/dev_lan_screen.dart';
 import 'package:rise_together_game/src/online/online_config.dart';
 import 'package:rise_together_game/src/online/online_menu_screen.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
 import 'package:rise_together_game/src/ui/settings_screen.dart';
-import 'package:rise_together_game/src/ui/solo_game_screen.dart';
+import 'package:rise_together_game/src/ui/solo_setup_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -73,7 +74,17 @@ class _HomeScreenState extends State<HomeScreen> with AppSettings {
                           ],
                         )
                       : 'home.soloSubtitle'.tr(),
-                  onPressed: () => _open(const SoloGameScreen()),
+                  onPressed: () async {
+                    final screen = await showSoloSetupSheet(context);
+                    if (screen != null) await _open(screen);
+                  },
+                ),
+                const SizedBox(height: 12),
+                _MenuButton(
+                  icon: Icons.architecture,
+                  title: 'home.editor'.tr(),
+                  subtitle: 'home.editorSubtitle'.tr(),
+                  onPressed: () => _open(const LevelLibraryScreen()),
                 ),
                 const SizedBox(height: 12),
                 _MenuButton(

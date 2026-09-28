@@ -9,14 +9,17 @@
     "onlineSubtitle": "Team up or compete with other players",
     "onlineComingSoon": "Online play is coming soon",
     "settings": "Settings",
-    "bestSolo": "Best: level {} · {}"
+    "bestSolo": "Best: level {} · {}",
+    "editor": "Level editor",
+    "editorSubtitle": "Build your own levels and share them"
   },
   "game": {
     "quit": "Quit",
     "quitTitle": "Leave the game?",
     "quitMessage": "Your progress in this round will be lost.",
     "stay": "Keep playing",
-    "leave": "Leave"
+    "leave": "Leave",
+    "endRunMessage": "End this run and see your results?"
   },
   "audio": {
     "musicOn": "Turn music on",
@@ -39,10 +42,17 @@
     "playAgain": "Play again",
     "backToMenu": "Back to menu",
     "waitingForHost": "Waiting for the host to start another round…",
-    "series": "Series (you – them)"
+    "series": "Series (you – them)",
+    "completed": "Completed!",
+    "runEnded": "Run ended",
+    "newBestTime": "New best time!",
+    "allLevels": "All {} levels",
+    "time": "Time",
+    "bestTime": "Best time"
   },
   "levelTransition": {
-    "getReady": "Level {}\nGet Ready!"
+    "getReady": "Level {}\nGet Ready!",
+    "getReadyCustom": "Custom level {} of {}\nGet Ready!"
   },
   "countdown": {
     "go": "GO!",
@@ -52,7 +62,9 @@
   },
   "inGame": {
     "liftLeft": "Lift LEFT",
-    "liftRight": "Lift RIGHT"
+    "liftRight": "Lift RIGHT",
+    "timeRemaining": "Time Remaining",
+    "timeElapsed": "Time"
   },
   "settings": {
     "title": "Settings",
@@ -154,6 +166,99 @@
       "hostLeft": "The room's host left.",
       "couldNotConnect": "Couldn't connect to the other players.",
       "invalidResponse": "Something went wrong talking to the server."
-    }
+    },
+    "customLevels": "Custom levels",
+    "customLevelsHelp": "Play on your own levels instead of the standard ones",
+    "customLevelsChosen": "{} · {} levels",
+    "quickMatchCustomHelp": "Play with others who chose custom levels",
+    "customLevelsNotice": "This match uses player-made levels, not the standard ones. If you'd rather not, cancel now.",
+    "customBadge": "CUSTOM LEVELS"
+  },
+  "solo": {
+    "title": "Play solo",
+    "timed": "Timed",
+    "untimed": "No time limit",
+    "timedHelp": "Climb as high as you can before time runs out.",
+    "untimedHelp": "Take your time: the run ends when you finish the last level or quit.",
+    "startLevel": "Start at level",
+    "unlockHelp": "Finish a level to be able to start from it.",
+    "bestTime": "Best time from here: {}",
+    "play": "Play",
+    "playCustom": "Play custom levels…"
+  },
+  "editor": {
+    "types": {
+      "fatal": "Hazard",
+      "powerupWidth": "Wider paddle",
+      "powerdownWidth": "Narrower paddle",
+      "controlReversal": "Swap controls",
+      "controlReversalZone": "Swap zone"
+    },
+    "typeHelp": {
+      "fatal": "Touching it restarts the level",
+      "powerupWidth": "Makes the paddle wider for the rest of the level",
+      "powerdownWidth": "Makes the paddle narrower for the rest of the level",
+      "controlReversal": "Swaps left and right for a while",
+      "controlReversalZone": "A band across the level that swaps left and right"
+    },
+    "params": {
+      "width": "Width {}",
+      "duration": "{} seconds",
+      "zoneHeight": "Height {}"
+    },
+    "full": "A level can hold at most {} objects.",
+    "noRoom": "There's no room for that here.",
+    "rename": "Name this level",
+    "nameHint": "Only you see this name",
+    "ok": "OK",
+    "saved": "Level saved",
+    "unsavedTitle": "Save your changes?",
+    "unsavedMessage": "This level has changes that aren't saved yet.",
+    "discard": "Discard",
+    "save": "Save",
+    "untitled": "Untitled level",
+    "testPlay": "Test play",
+    "height": "Height",
+    "objectCount": "{} / {} objects",
+    "hint": "Tap to place · tap an object to select it · long-press to drag",
+    "delete": "Delete",
+    "done": "Done"
+  },
+  "library": {
+    "title": "My levels",
+    "full": "Your library is full ({} levels). Delete some to make room.",
+    "exportTitle": "Export levels",
+    "copy": "Copy to clipboard",
+    "saveFile": "Save as a file",
+    "copied": "Copied to the clipboard",
+    "savedFile": "File saved",
+    "exportFailed": "Couldn't export the levels.",
+    "importTitle": "Import levels",
+    "paste": "Paste from the clipboard",
+    "openFile": "Open a file",
+    "importInvalid": "That isn't a valid Rise Together levels file.",
+    "imported": "Imported {} levels",
+    "importedSome": "Imported {} of {} levels: your library is full.",
+    "deleteTitle": "Delete “{}”?",
+    "import": "Import",
+    "exportAll": "Export all",
+    "levels": "Levels",
+    "packs": "Packs",
+    "new": "New",
+    "noLevels": "No levels yet. Tap New to build one, or import some.",
+    "noPacks": "A pack plays several of your levels in a row. Tap New to make one.",
+    "levelSummary": "Height ×{} · {} objects",
+    "play": "Play",
+    "duplicate": "Duplicate",
+    "export": "Export",
+    "untitledPack": "Untitled pack",
+    "packSummary": "{} levels",
+    "packsFull": "You can have at most {} packs.",
+    "newPack": "New pack",
+    "editPack": "Edit pack",
+    "packName": "Pack name",
+    "packOrder": "Levels, in order ({} / {})",
+    "addLevel": "Add a level",
+    "pickTitle": "Choose levels to play"
   }
 }

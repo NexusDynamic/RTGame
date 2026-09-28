@@ -9,14 +9,17 @@
     "onlineSubtitle": "Spil sammen med eller mod andre",
     "onlineComingSoon": "Onlinespil kommer snart",
     "settings": "Indstillinger",
-    "bestSolo": "Bedste: niveau {} · {}"
+    "bestSolo": "Bedste: niveau {} · {}",
+    "editor": "Baneeditor",
+    "editorSubtitle": "Byg dine egne baner og del dem"
   },
   "game": {
     "quit": "Afslut",
     "quitTitle": "Forlad spillet?",
     "quitMessage": "Dine fremskridt i denne runde går tabt.",
     "stay": "Spil videre",
-    "leave": "Forlad"
+    "leave": "Forlad",
+    "endRunMessage": "Vil du afslutte dette forsøg og se dit resultat?"
   },
   "audio": {
     "musicOn": "Slå musik til",
@@ -39,10 +42,17 @@
     "playAgain": "Spil igen",
     "backToMenu": "Tilbage til menuen",
     "waitingForHost": "Venter på, at værten starter en ny runde…",
-    "series": "Serie (jer – dem)"
+    "series": "Serie (jer – dem)",
+    "completed": "Gennemført!",
+    "runEnded": "Forsøget er slut",
+    "newBestTime": "Ny bedste tid!",
+    "allLevels": "Alle {} baner",
+    "time": "Tid",
+    "bestTime": "Bedste tid"
   },
   "levelTransition": {
-    "getReady": "Niveau {}\nGør dig klar!"
+    "getReady": "Niveau {}\nGør dig klar!",
+    "getReadyCustom": "Egen bane {} af {}\nGør dig klar!"
   },
   "countdown": {
     "go": "KØR!",
@@ -52,7 +62,9 @@
   },
   "inGame": {
     "liftLeft": "Løft VENSTRE",
-    "liftRight": "Løft HØJRE"
+    "liftRight": "Løft HØJRE",
+    "timeRemaining": "Tid tilbage",
+    "timeElapsed": "Tid"
   },
   "settings": {
     "title": "Indstillinger",
@@ -154,6 +166,99 @@
       "hostLeft": "Rummets vært gik.",
       "couldNotConnect": "Kunne ikke forbinde til de andre spillere.",
       "invalidResponse": "Noget gik galt i kommunikationen med serveren."
-    }
+    },
+    "customLevels": "Egne baner",
+    "customLevelsHelp": "Spil på dine egne baner i stedet for standardbanerne",
+    "customLevelsChosen": "{} · {} baner",
+    "quickMatchCustomHelp": "Spil med andre, der har valgt egne baner",
+    "customLevelsNotice": "Denne kamp bruger baner lavet af en spiller, ikke standardbanerne. Vil du ikke det, så annullér nu.",
+    "customBadge": "EGNE BANER"
+  },
+  "solo": {
+    "title": "Spil alene",
+    "timed": "Med tid",
+    "untimed": "Uden tidsgrænse",
+    "timedHelp": "Kom så højt op som muligt, før tiden løber ud.",
+    "untimedHelp": "Tag den tid, du har brug for: forsøget slutter, når du klarer sidste bane eller stopper.",
+    "startLevel": "Start på bane",
+    "unlockHelp": "Klar en bane for at kunne starte fra den.",
+    "bestTime": "Bedste tid herfra: {}",
+    "play": "Spil",
+    "playCustom": "Spil egne baner…"
+  },
+  "editor": {
+    "types": {
+      "fatal": "Fare",
+      "powerupWidth": "Bredere platform",
+      "powerdownWidth": "Smallere platform",
+      "controlReversal": "Byt styring",
+      "controlReversalZone": "Byttezone"
+    },
+    "typeHelp": {
+      "fatal": "Rører bolden den, starter banen forfra",
+      "powerupWidth": "Gør platformen bredere resten af banen",
+      "powerdownWidth": "Gør platformen smallere resten af banen",
+      "controlReversal": "Bytter venstre og højre et stykke tid",
+      "controlReversalZone": "Et bånd på tværs af banen, der bytter venstre og højre"
+    },
+    "params": {
+      "width": "Bredde {}",
+      "duration": "{} sekunder",
+      "zoneHeight": "Højde {}"
+    },
+    "full": "En bane kan højst indeholde {} ting.",
+    "noRoom": "Der er ikke plads til den her.",
+    "rename": "Navngiv banen",
+    "nameHint": "Kun du kan se navnet",
+    "ok": "OK",
+    "saved": "Banen er gemt",
+    "unsavedTitle": "Gem ændringerne?",
+    "unsavedMessage": "Banen har ændringer, der ikke er gemt.",
+    "discard": "Kassér",
+    "save": "Gem",
+    "untitled": "Unavngivet bane",
+    "testPlay": "Prøvespil",
+    "height": "Højde",
+    "objectCount": "{} / {} ting",
+    "hint": "Tryk for at placere · tryk på en ting for at vælge den · hold nede for at trække",
+    "delete": "Slet",
+    "done": "Færdig"
+  },
+  "library": {
+    "title": "Mine baner",
+    "full": "Dit bibliotek er fuldt ({} baner). Slet nogle for at gøre plads.",
+    "exportTitle": "Eksportér baner",
+    "copy": "Kopiér til udklipsholderen",
+    "saveFile": "Gem som fil",
+    "copied": "Kopieret til udklipsholderen",
+    "savedFile": "Filen er gemt",
+    "exportFailed": "Banerne kunne ikke eksporteres.",
+    "importTitle": "Importér baner",
+    "paste": "Indsæt fra udklipsholderen",
+    "openFile": "Åbn en fil",
+    "importInvalid": "Det er ikke en gyldig Rise Together-banefil.",
+    "imported": "{} baner importeret",
+    "importedSome": "{} af {} baner importeret: dit bibliotek er fuldt.",
+    "deleteTitle": "Slet “{}”?",
+    "import": "Importér",
+    "exportAll": "Eksportér alle",
+    "levels": "Baner",
+    "packs": "Pakker",
+    "new": "Ny",
+    "noLevels": "Ingen baner endnu. Tryk Ny for at bygge en, eller importér nogle.",
+    "noPacks": "En pakke spiller flere af dine baner i træk. Tryk Ny for at lave en.",
+    "levelSummary": "Højde ×{} · {} ting",
+    "play": "Spil",
+    "duplicate": "Duplikér",
+    "export": "Eksportér",
+    "untitledPack": "Unavngivet pakke",
+    "packSummary": "{} baner",
+    "packsFull": "Du kan højst have {} pakker.",
+    "newPack": "Ny pakke",
+    "editPack": "Redigér pakke",
+    "packName": "Pakkens navn",
+    "packOrder": "Baner i rækkefølge ({} / {})",
+    "addLevel": "Tilføj en bane",
+    "pickTitle": "Vælg baner at spille"
   }
 }

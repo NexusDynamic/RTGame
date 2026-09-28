@@ -1,3 +1,4 @@
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/game/rise_together_levels.dart';
 
 /// Manages an ordered sequence of levels that teams progress through.
@@ -5,7 +6,10 @@ import 'package:rise_together_game/src/game/rise_together_levels.dart';
 class LevelSequence {
   final List<RiseTogetherLevel> _levels;
 
-  LevelSequence(this._levels) {
+  /// Whether these are player-made levels rather than the built-in ones.
+  final bool isCustom;
+
+  LevelSequence(this._levels, {this.isCustom = false}) {
     if (_levels.isEmpty) {
       throw ArgumentError('Level sequence must contain at least one level');
     }
@@ -44,6 +48,11 @@ class LevelSequence {
     }
     return currentIndex + 1;
   }
+
+  /// Player-made levels, in order.
+  factory LevelSequence.custom(Iterable<CustomLevel> levels) => LevelSequence([
+    for (final level in levels) CustomRiseTogetherLevel(level),
+  ], isCustom: true);
 
   /// Create a default level sequence with predefined levels
   factory LevelSequence.defaultSequence() {

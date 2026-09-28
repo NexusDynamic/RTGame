@@ -118,7 +118,9 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
   bool _isIndividualConditionMode = false;
   bool _individualConditionCompleted = false;
   IndividualConditionResult? _individualConditionResult;
-  double _individualConditionDuration =
+
+  /// Solo round length in seconds; null for an untimed run.
+  double? _individualConditionDuration =
       120.0; // Default 2 minutes for individual condition
 
   /// Per-team level tracking
@@ -162,10 +164,17 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
   bool get individualConditionCompleted => _individualConditionCompleted;
   IndividualConditionResult? get individualConditionResult =>
       _individualConditionResult;
-  double get individualConditionDuration => _individualConditionDuration;
+  double? get individualConditionDuration => _individualConditionDuration;
 
   /// Get current level index for a specific team
   int getTeamLevelIndex(int teamId) => _teamLevelIndices[teamId] ?? 0;
+
+  /// Put a team on [levelIndex] without a completion, e.g. when a run starts
+  /// part-way through the sequence.
+  void setTeamLevelIndex(int teamId, int levelIndex) {
+    _teamLevelIndices[teamId] = levelIndex;
+    notifyListeners();
+  }
 
   /// Get total reset count for a specific team
   int getTeamResets(int teamId) => _teamResets[teamId] ?? 0;
@@ -396,7 +405,7 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
   }
 
   /// Start solo (individual) mode
-  void startIndividualCondition({required double durationSeconds, int? seed}) {
+  void startIndividualCondition({required double? durationSeconds, int? seed}) {
     _isIndividualConditionMode = true;
     _individualConditionCompleted = false;
     _individualConditionResult = null;
@@ -405,7 +414,7 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
     _resetRoundState();
 
     appLog.info(
-      'Individual condition started: ${durationSeconds}s duration, seed: $_currentTournamentSeed',
+      'Individual condition started: ${durationSeconds ?? 'untimed'}s duration, seed: $_currentTournamentSeed',
     );
     notifyListeners();
   }

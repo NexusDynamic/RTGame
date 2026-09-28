@@ -90,6 +90,23 @@ mixin class AppSettings {
             /// Best solo result, for the home screen.
             IntSetting(key: 'best_solo_level', defaultValue: 0),
             DoubleSetting(key: 'best_solo_distance', defaultValue: 0.0),
+
+            /// Highest built-in level (0-based) finished in solo; -1 = none.
+            /// Unlocks starting a solo run further up.
+            IntSetting(key: 'max_completed_level', defaultValue: -1),
+
+            /// Fastest untimed runs, a JSON map of run key to seconds. See
+            /// SoloProgress.
+            StringSetting(key: 'best_times', defaultValue: '{}'),
+          ],
+        ),
+        GroupConfig(
+          key: 'levels',
+          items: [
+            /// The player's own custom levels and packs, as JSON. Only ever
+            /// written from this device's editor or an import the player
+            /// chose; levels received online are never stored.
+            StringSetting(key: 'library', defaultValue: ''),
           ],
         ),
       ]);

@@ -46,6 +46,7 @@ dependencies:
     path: server
   webrtc_coordinator: ^0.2.0
   webrtc_coordinator_flutter: ^0.2.1
+  file_picker: ^13.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

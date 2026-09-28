@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:rise_together_game/src/models/player_action.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
 
@@ -46,6 +47,9 @@ class FakeGameSession implements GameSession {
     roundDurationSeconds: 60,
     seed: 1,
   );
+
+  @override
+  CustomLevelPack? customLevels;
 
   @override
   Stream<PlayerActionMessage> get actions => actionsIn.stream;

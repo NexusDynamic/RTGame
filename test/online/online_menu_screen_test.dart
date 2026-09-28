@@ -29,6 +29,11 @@ void main() {
     tester,
   ) async {
     await pump(tester);
+    // The code field sits at the bottom of the menu.
+    await tester.scrollUntilVisible(
+      find.widgetWithText(FilledButton, 'online.join'),
+      200,
+    );
     FilledButton join() => tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'online.join'),
     );

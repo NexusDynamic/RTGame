@@ -21,7 +21,8 @@ abstract class LobbyPeer {
 
 /// Groups players into matches.
 ///
-/// Quick match fills a queue per (mode, size); private rooms fill by code.
+/// Quick match fills a queue per (mode, size, custom levels); private rooms
+/// fill by code.
 /// When a group is complete the matchmaker opens a [Room], sends each player
 /// their [MatchFound] (the first to have arrived hosts) and lets them go.
 class Matchmaker {
@@ -35,11 +36,16 @@ class Matchmaker {
   final Future<Room?> Function(LobbyMode mode, int players) openRoom;
 
   /// Builds a player's match message for [room].
-  final MatchFound Function(Room room, {required bool host}) credentialsFor;
+  final MatchFound Function(
+    Room room, {
+    required bool host,
+    required bool custom,
+  })
+  credentialsFor;
 
   final Duration privateRoomTtl;
 
-  final Map<(LobbyMode, int), List<LobbyPeer>> _queues = {};
+  final Map<_QueueKey, List<LobbyPeer>> _queues = {};
   final Map<String, _PrivateRoom> _private = {};
 
   /// Where each peer is waiting. A peer waits in at most one place.
@@ -56,10 +62,10 @@ class Matchmaker {
       return;
     }
     switch (message) {
-      case QuickMatch(:final mode, :final players):
-        await _queue(peer, mode, players);
-      case CreateRoom(:final mode, :final players):
-        _create(peer, mode, players);
+      case QuickMatch(:final mode, :final players, :final custom):
+        await _queue(peer, (mode, players, custom));
+      case CreateRoom(:final mode, :final players, :final custom):
+        _create(peer, mode, players, custom);
       case JoinRoom(:final code):
         await _join(peer, code);
     }
@@ -68,7 +74,7 @@ class Matchmaker {
   /// Forget [peer]: it disconnected.
   void remove(LobbyPeer peer) {
     final where = _waiting.remove(peer);
-    if (where is (LobbyMode, int)) {
+    if (where is _QueueKey) {
       final queue = _queues[where]!..remove(peer);
       _announceQueue(where, queue);
     } else if (where is _PrivateRoom) {
@@ -81,8 +87,8 @@ class Matchmaker {
     }
   }
 
-  Future<void> _queue(LobbyPeer peer, LobbyMode mode, int players) async {
-    final key = (mode, players);
+  Future<void> _queue(LobbyPeer peer, _QueueKey key) async {
+    final (mode, players, custom) = key;
     final queue = _queues.putIfAbsent(key, () => []);
     queue.add(peer);
     _waiting[peer] = key;
@@ -95,25 +101,25 @@ class Matchmaker {
     for (final member in group) {
       _waiting.remove(member);
     }
-    await _startMatch(group, mode, players);
+    await _startMatch(group, mode, players, custom: custom);
   }
 
-  void _announceQueue((LobbyMode, int) key, List<LobbyPeer> queue) {
+  void _announceQueue(_QueueKey key, List<LobbyPeer> queue) {
     // Each waiting player sees how full their next match is.
-    final players = key.$2;
+    final (_, players, custom) = key;
     for (var i = 0; i < queue.length; i++) {
       final ahead = i - i % players;
       final joined = min(queue.length - ahead, players);
-      queue[i].send(Waiting(joined: joined, players: players));
+      queue[i].send(Waiting(joined: joined, players: players, custom: custom));
     }
   }
 
-  void _create(LobbyPeer peer, LobbyMode mode, int players) {
+  void _create(LobbyPeer peer, LobbyMode mode, int players, bool custom) {
     var code = _newCode();
     while (_private.containsKey(code)) {
       code = _newCode();
     }
-    final room = _PrivateRoom(code, mode, players, peer);
+    final room = _PrivateRoom(code, mode, players, custom, peer);
     room.expiry = Timer(privateRoomTtl, () {
       _closePrivate(room, const LobbyError(LobbyErrorCode.roomNotFound));
     });
@@ -143,7 +149,12 @@ class Matchmaker {
     for (final member in room.members) {
       _waiting.remove(member);
     }
-    await _startMatch(room.members, room.mode, room.players);
+    await _startMatch(
+      room.members,
+      room.mode,
+      room.players,
+      custom: room.custom,
+    );
   }
 
   void _closePrivate(_PrivateRoom room, LobbyError error) {
@@ -159,14 +170,15 @@ class Matchmaker {
   Future<void> _startMatch(
     List<LobbyPeer> group,
     LobbyMode mode,
-    int players,
-  ) async {
+    int players, {
+    required bool custom,
+  }) async {
     final room = await openRoom(mode, players);
     for (var i = 0; i < group.length; i++) {
       group[i].send(
         room == null
             ? const LobbyError(LobbyErrorCode.busy)
-            : credentialsFor(room, host: i == 0),
+            : credentialsFor(room, host: i == 0, custom: custom),
       );
       unawaited(group[i].close());
     }
@@ -193,13 +205,25 @@ class Matchmaker {
   }
 }
 
+/// A quick-match queue: mode, players, and whether on custom levels.
+typedef _QueueKey = (LobbyMode, int, bool);
+
 class _PrivateRoom {
-  _PrivateRoom(this.code, this.mode, this.players, LobbyPeer creator)
-    : members = [creator];
+  _PrivateRoom(
+    this.code,
+    this.mode,
+    this.players,
+    this.custom,
+    LobbyPeer creator,
+  ) : members = [creator];
 
   final String code;
   final LobbyMode mode;
   final int players;
+
+  /// Played on the creator's levels. Joiners learn this from [announce]
+  /// before the match starts.
+  final bool custom;
 
   /// The creator first: they host.
   final List<LobbyPeer> members;
@@ -208,7 +232,12 @@ class _PrivateRoom {
   void announce() {
     for (final member in members) {
       member.send(
-        Waiting(joined: members.length, players: players, code: code),
+        Waiting(
+          joined: members.length,
+          players: players,
+          code: code,
+          custom: custom,
+        ),
       );
     }
   }

@@ -4,6 +4,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rise_together_lobby/protocol.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
+import 'package:rise_together_game/src/online/custom_levels_badge.dart';
 import 'package:rise_together_game/src/online/lobby_client.dart';
 import 'package:rise_together_game/src/online/matchmaking_controller.dart';
 import 'package:rise_together_game/src/online/online_game_screen.dart';
@@ -17,10 +19,14 @@ class MatchmakingScreen extends StatefulWidget {
     super.key,
     required this.lobbyUrl,
     required this.request,
+    this.customLevels,
   });
 
   final Uri lobbyUrl;
   final ClientMessage request;
+
+  /// This player's levels, for a custom-levels request.
+  final CustomLevelPack? customLevels;
 
   @override
   State<MatchmakingScreen> createState() => _MatchmakingScreenState();
@@ -42,6 +48,7 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
         request: widget.request,
         nickname: appSettings.getString('player.nickname'),
         roundDurationSeconds: appSettings.getDouble('game.round_duration'),
+        customLevels: widget.customLevels,
       ),
     );
   }
@@ -92,6 +99,16 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
                     color: theme.colorScheme.error,
                   ),
                 const SizedBox(height: 24),
+                if (_isCustom(state)) ...[
+                  const CustomLevelsBadge(),
+                  const SizedBox(height: 8),
+                  Text(
+                    'online.customLevelsNotice'.tr(),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 ..._describe(state, theme),
                 const SizedBox(height: 32),
                 OutlinedButton(
@@ -107,6 +124,11 @@ class _MatchmakingScreenState extends State<MatchmakingScreen>
       ),
     );
   }
+
+  static bool _isCustom(MatchmakingState state) => switch (state) {
+    Gathering(:final custom) || ConnectingToPlayers(:final custom) => custom,
+    _ => false,
+  };
 
   List<Widget> _describe(MatchmakingState state, ThemeData theme) {
     Widget line(String text) => Text(

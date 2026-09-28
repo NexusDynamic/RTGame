@@ -1,5 +1,7 @@
+import 'package:flame/components.dart' show Vector2;
 import 'package:rise_together_game/src/game/game_geometry.dart';
 import 'package:rise_together_game/src/game/level_spawn_config.dart';
+import 'package:rise_together_game/src/levels/custom_level.dart';
 
 abstract class RiseTogetherLevel {
   /// Width of the playfield, in world units.
@@ -251,4 +253,47 @@ class Level10 extends SlottedLevel {
     _fatal, //
   ];
   const Level10();
+}
+
+/// A level the player built (see `lib/src/levels/custom_level.dart`).
+///
+/// Objects sit exactly where the author put them; the seed is ignored, so a
+/// level plays the same every time and on every device.
+class CustomRiseTogetherLevel extends RiseTogetherLevel {
+  CustomRiseTogetherLevel(this.data);
+
+  final CustomLevel data;
+
+  @override
+  double get verticalMultiplier => data.heightMultiplier;
+
+  @override
+  LevelSpawnConfig? spawnConfigForSeed(int experimentSeed) {
+    if (data.objects.isEmpty) return null;
+    final height = verticalHeight;
+    return LevelSpawnConfig.fixed(
+      levelWidth: RiseTogetherLevel.horizontalWidth,
+      levelHeight: height,
+      placements: [
+        for (final o in data.objects)
+          SpawnPlacement(
+            SpawnInstance(
+              objectType: o.type.spawnType,
+              constraints: PlacementConstraints(
+                minVerticalProgress: o.y / height,
+                maxVerticalProgress: o.y / height,
+                minHorizontalPosition: o.x,
+                maxHorizontalPosition: o.x,
+              ),
+              customParams: {
+                if (o.type.param case final spec?) spec.key: ?o.param,
+              },
+            ),
+            // World y is negative going up.
+            Vector2(o.x, -o.y),
+            Vector2(o.size.$1, o.size.$2),
+          ),
+      ],
+    );
+  }
 }

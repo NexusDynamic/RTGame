@@ -35,8 +35,11 @@ class InteractiveGame extends RiseTogetherGameBase {
 
   /// Localized form of the base class's plain-string default.
   @override
-  String levelTransitionMessage(int levelIndex) =>
-      'levelTransition.getReady'.tr(args: [(levelIndex + 1).toString()]);
+  String levelTransitionMessage(int levelIndex) => levelSequence.isCustom
+      ? 'levelTransition.getReadyCustom'.tr(
+          args: ['${levelIndex + 1}', '${levelSequence.levelCount}'],
+        )
+      : 'levelTransition.getReady'.tr(args: [(levelIndex + 1).toString()]);
 
   /// The host screen shows the results (see `onTimeUp`); the game just stops.
   @override

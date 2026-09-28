@@ -4,6 +4,11 @@ A cooperative and competitive physics game. Keep the ball in the air by
 lifting the left and right sides of your paddle, climb through the levels, and
 race the other team to the top.
 
+This is a hard fork from the RiseTogether research platform, the RiseTogether version
+is an experimental paradigm for researching group social dynamics. This version of the
+game is much more game-like and does not have all of the logging and multimodal
+integration that are used in the experiments.
+
 - **Solo**: play offline and beat your best height.
 - **Online**: team up (co-op) or play against another team (versus). Use quick
   match or a private room code. Players connect peer to peer, and the host
