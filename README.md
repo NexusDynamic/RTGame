@@ -19,9 +19,11 @@ flutter pub get
 flutter run            # or: flutter run -d chrome
 flutter test
 flutter test integration_test/real_webrtc_test.dart -d linux   # real WebRTC
+scripts/with-weston.sh flutter test integration_test/real_webrtc_test.dart -d linux   # same, headless (as CI)
 ```
 
-Online play needs the lobby server (`server/`, see its README). Point a build
+Online play needs the lobby server (`server/`; deploying it, behind Caddy or
+an existing nginx, is in `server/deploy/README.md`). Point a build
 at it with `--dart-define=LOBBY_URL=https://your.host`. For web builds, add
 `--wasm --no-web-resources-cdn`.
 

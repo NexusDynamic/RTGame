@@ -1,0 +1,15 @@
+# For a VPS that already runs nginx (or another reverse proxy) on 80/443:
+# run the lobby without Caddy and let the host's nginx proxy to it. See
+# nginx.conf.example and the README.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.nginx.yml \
+#     up -d --build lobby        # add `coturn --profile turn` for the bundled coturn
+#
+# Naming `lobby` is what leaves Caddy out: compose starts only the services
+# asked for (plus their dependencies, and the lobby has none).
+services:
+  lobby:
+    # Loopback only: the host's nginx is the public edge. Change the host
+    # port with LOBBY_HOST_PORT if 8080 is taken.
+    ports:
+      - "127.0.0.1:${LOBBY_HOST_PORT:-8080}:8080"

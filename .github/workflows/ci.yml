@@ -42,12 +42,26 @@ jobs:
           channel: stable
           cache: true
       - name: Linux desktop dependencies
+        # gstreamer: audioplayers_linux. weston: the headless Wayland display.
+        # pulseaudio: the app aborts at startup with no audio server to open.
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libstdc++-12-dev libpulse-dev xvfb
+            libgtk-3-dev liblzma-dev libstdc++-12-dev libpulse-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            weston pulseaudio
+      - name: Audio server
+        # A private runtime dir, so the app and the daemon agree on where the
+        # pulse socket is. A null sink stands in for a sound card.
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          pulseaudio --daemonize --exit-idle-time=-1
+          pactl load-module module-null-sink sink_name=ci
+          pactl set-default-sink ci
       - run: flutter pub get
-      - run: xvfb-run -a flutter test integration_test/real_webrtc_test.dart -d linux
+      - run: scripts/with-weston.sh flutter test integration_test/real_webrtc_test.dart -d linux
 
   build-web:
     name: Build web

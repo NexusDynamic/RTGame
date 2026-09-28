@@ -38,14 +38,76 @@ record raw addresses.
 
 ## Deploy
 
+There are two builds, and you only run one of them yourself:
+
+- **The lobby** (`server/bin/lobby.dart`) is compiled by the Dockerfile when
+  you pass `--build`. There is nothing to build for it by hand.
+- **The web app** is the game itself (`lib/main.dart` at the repository
+  root). Build it from the **repository root**, not from `server/`. That is
+  why `flutter build` reports `Target file "lib/main.dart" not found` when it
+  runs in here:
+
+  ```sh
+  # from the repository root
+  flutter build web --wasm --no-web-resources-cdn \
+    --dart-define=LOBBY_URL=https://play.example.com \
+    --dart-define=GIT_SHA=$(git rev-parse HEAD)
+  ```
+
+  `LOBBY_URL` is the same host that serves the web app. The lobby only
+  accepts browsers from `https://$DOMAIN` (`ALLOWED_ORIGINS`), so serve both
+  from one domain. Native builds use the same `--dart-define`.
+
+Then `cp .env.example .env` in this directory, and fill in `DOMAIN`,
+`PUBLIC_IP` and the two secrets. After that, pick one of the two options
+below.
+
+### A. Caddy (a VPS with nothing on 80/443)
+
 ```sh
 cd server/deploy
-cp .env.example .env            # fill in DOMAIN, PUBLIC_IP and the two secrets
-mkdir -p web && cp -r ../../build/web/* web/   # after `flutter build web --wasm`
+mkdir -p web && cp -r ../../build/web/* web/
 docker compose up -d --build              # add --profile turn for the bundled coturn
 ```
 
-Open TCP 80 and 443. For TURN, also open TCP/UDP `TURN_PORT` (default 3478) and the UDP relay range (default 49160–49400).
+Caddy gets the certificate itself. Open TCP 80 and 443.
+
+### B. An existing nginx
+
+Run only the lobby, published on `127.0.0.1:8080`, and let nginx do TLS and
+serve the web build:
+
+```sh
+cd server/deploy
+docker compose -f docker-compose.yml -f docker-compose.nginx.yml up -d --build lobby
+# with the bundled coturn:
+#   docker compose -f docker-compose.yml -f docker-compose.nginx.yml --profile turn up -d --build lobby coturn
+
+sudo mkdir -p /var/www/rise-together
+sudo cp -r ../../build/web/* /var/www/rise-together/
+sudo cp nginx.conf.example /etc/nginx/sites-available/rise-together   # edit the hostname
+sudo ln -s ../sites-available/rise-together /etc/nginx/sites-enabled/
+sudo certbot --nginx -d play.example.com      # or point the ssl_* lines at existing certs
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+`nginx.conf.example` does what the Caddyfile does, and all of it matters:
+
+- WebSocket upgrades for `/api/*` and `/room/*`, with long read timeouts.
+- `X-Forwarded-For` **overwritten** with `$remote_addr`, not appended. The
+  lobby rate-limits by it (`TRUST_PROXY=true`).
+- COOP/COEP headers on the web app. Without them the wasm build loses
+  multithreading.
+- Access log off.
+
+If port 8080 is taken on the host, set `LOBBY_HOST_PORT` in `.env` and change
+`proxy_pass` to match.
+
+### Either way
+
+For TURN, also open TCP/UDP `TURN_PORT` (default 3478) and the UDP relay
+range (default 49160–49400). Check with `curl https://play.example.com/health`,
+which should print `ok`.
 
 ## TURN: bundled or shared
 
@@ -68,9 +130,6 @@ without storing anything.
 A TURN server cannot be limited to a domain name. Clients reach it by IP and
 port over UDP, which carries no hostname. Separating by address only works if
 the VPS has a second IP (`--listening-ip` / `--relay-ip`).
-
-Build the app with the lobby's address:
-`flutter build <platform> --dart-define=LOBBY_URL=https://play.example.com`.
 
 ## Development
 

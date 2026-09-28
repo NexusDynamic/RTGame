@@ -1,0 +1,62 @@
+# Rise Together behind an existing nginx: the equivalent of the Caddyfile.
+# Copy to /etc/nginx/sites-available/ (or conf.d/), replace play.example.com,
+# point the certificate paths at yours (e.g. from `certbot --nginx`), and set
+# `root` to wherever the web build was copied.
+
+# WebSocket upgrades for the lobby socket and the room hubs.
+map $http_upgrade $rt_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name play.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name play.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/play.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/play.example.com/privkey.pem;
+
+    # No access log on purpose: it would record every player's IP address,
+    # which PRIVACY.md promises is not kept.
+    access_log off;
+
+    # Lobby API and room signaling hubs.
+    location ~ ^/(api/|room/|health$) {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $rt_connection_upgrade;
+        proxy_set_header Host $host;
+        # Overwrite, never append ($proxy_add_x_forwarded_for appends): a
+        # client-supplied X-Forwarded-For must not reach the lobby, which
+        # rate-limits by this address.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        # Lobby and room sockets are long-lived; don't cut them at nginx's 60s.
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    # The web build of the game.
+    location / {
+        root /var/www/rise-together;
+        try_files $uri /index.html;
+
+        # WebAssembly builds need cross-origin isolation for multithreading.
+        add_header Cross-Origin-Opener-Policy same-origin always;
+        add_header Cross-Origin-Embedder-Policy require-corp always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy no-referrer always;
+    }
+
+    gzip on;
+    gzip_types application/wasm application/javascript text/css application/json;
+}

@@ -14,14 +14,16 @@ RUN sed -i '/^dev_dependencies:/,$d' pubspec.yaml \
     && dart pub get \
     && dart compile exe bin/lobby.dart -o /build/lobby
 
-FROM debian:bookworm-slim AS runtime
+# /runtime holds exactly the shared libraries a Dart AOT binary needs, laid out
+# for an empty image. Copied onto a distro it clashes with merged-/usr (/lib is
+# a symlink there), so the image is scratch: no shell, no package manager.
+FROM scratch AS runtime
 COPY --from=build /runtime/ /
 COPY --from=build /build/lobby /app/lobby
 
 # Unprivileged: the lobby opens sockets (its own, and one loopback port per
-# room hub) and touches no files.
-RUN useradd --system --uid 10001 --no-create-home lobby
-USER lobby
+# room hub) and touches no files. Numeric, since scratch has no /etc/passwd.
+USER 10001:10001
 
 # Container-internal only: Caddy is the public edge.
 EXPOSE 8080
