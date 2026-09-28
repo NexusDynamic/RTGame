@@ -8,7 +8,3 @@ dependency_overrides:
   # peer_coordinator ships its conformance suite, so it depends on `test`
   # (not just dev), which needs a newer test_api than flutter_test pins.
   test_api: ^0.7.13
-  # TEMPORARY: native data-channel open-event fix, until the next
-  # webrtc_coordinator_flutter release. Remove once published.
-  webrtc_coordinator_flutter:
-    path: ../liblsl.dart/packages/webrtc_coordinator_flutter
