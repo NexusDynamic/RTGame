@@ -117,7 +117,7 @@ jobs:
           tags: |
             type=raw,value=${{ needs.parse.outputs.version }}
             type=raw,value=latest,enable=${{ needs.parse.outputs.prerelease != 'true' }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: server
           file: server/deploy/Dockerfile
