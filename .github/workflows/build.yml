@@ -178,6 +178,6 @@ jobs:
 
       - name: Upload Pages site
         if: matrix.target == 'pages'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: build/web
