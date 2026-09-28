@@ -6,7 +6,11 @@ import 'package:rise_together_game/src/online/online_config.dart';
 /// Edits the lobby server. Pops the new setting value: the typed address, or
 /// '' for this build's default; null when cancelled.
 class ServerDialog extends StatefulWidget {
-  const ServerDialog({required this.initial, required this.defaultUrl});
+  const ServerDialog({
+    super.key,
+    required this.initial,
+    required this.defaultUrl,
+  });
 
   final String initial;
   final Uri? defaultUrl;
