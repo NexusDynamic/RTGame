@@ -2,8 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/game/game_geometry.dart';
 import 'package:rise_together_game/src/game/rise_together_world.dart';
 
-/// The background parallax (stars and the bg_scaffold girders) scrolls to
-/// represent how fast the paddle is rising.
+/// The background parallax (the star layers) scrolls to represent how fast the
+/// paddle is rising. The bg_scaffold girders used to be its front layer; they
+/// are now drawn in world space, locked to the ground.
 ///
 /// It used to scroll on the bare normalised thrust, which is a 0..1 team input
 /// and not a speed. The speed that thrust actually produces is

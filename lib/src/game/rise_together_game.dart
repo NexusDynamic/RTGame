@@ -1091,6 +1091,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       // loadLevel() as soon as the game reports isLoaded, before the worlds
       // have run their own onLoad.
       'assets/images/ground_floor.png',
+      'assets/images/bg_scaffold.png',
       'assets/images/obstacle_fatal.png',
       'assets/images/powerup_paddle_width.png',
       'assets/images/trigger_control_reversal.png',

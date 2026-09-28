@@ -122,6 +122,9 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
   late Ball ball;
   late Paddle paddle;
   late final Image? image;
+
+  /// The girders, tiled up the level from the ground. See [_scaffoldShader].
+  late final Paint _scaffoldPaint;
   final TeamDisplayPosition pos;
   late final BackgroundLayer bgLayer;
   bool _isInitialized = false;
@@ -176,6 +179,10 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     // assigned in onLoad would still be uninitialized there. The game preloads
     // it before constructing any world.
     image = Flame.images.fromCache('assets/images/ground_floor.png');
+    _scaffoldPaint = Paint()
+      ..shader = _scaffoldShader(
+        Flame.images.fromCache('assets/images/bg_scaffold.png'),
+      );
     _objectPool = LevelObjectPool(this);
   }
 
@@ -489,11 +496,35 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     return false;
   }
 
+  /// Tiles [scaffold] across the level in world space: one tile per
+  /// level-width square, the bottom row standing on the ground (y = 0).
+  ///
+  /// The girders used to be the front parallax layer, scrolled from thrust at
+  /// a fixed screen-pixel rate while the world moves at paddle speed times the
+  /// camera zoom, which follows the viewport width. They matched the floor on
+  /// one screen size only and slid off it everywhere else. Drawn in the world,
+  /// they move exactly with it.
+  static ImageShader _scaffoldShader(Image scaffold) {
+    final tile = RiseTogetherLevel.horizontalWidth;
+    final transform = Matrix4.identity()
+      ..translateByDouble(-tile / 2, -tile, 0, 1)
+      ..scaleByDouble(tile / scaffold.width, tile / scaffold.height, 1, 1);
+    return ImageShader(
+      scaffold,
+      TileMode.repeated,
+      TileMode.repeated,
+      transform.storage,
+      filterQuality: FilterQuality.medium,
+    );
+  }
+
   @override
   void render(Canvas canvas) {
-    // Render background gradient first (before everything else).
+    // Background first (before everything else): the girders, then the
+    // gradient, which lightens over them as it did over the parallax layer.
     if (_bgLayerInitialized && bgLayer._ready) {
       canvas.save();
+      canvas.drawRect(bgLayer.rect, _scaffoldPaint);
       canvas.drawRect(bgLayer.rect, bgLayer.paint);
       canvas.restore();
     }
@@ -738,12 +769,11 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     // Matches the camera viewport this world is drawn through: half the canvas
     // in the split view, the whole canvas in the single view. Sized wrong, the
     // starfield either tiles short of the viewport edge or scrolls at the
-    // wrong apparent rate.
-    // Kept matched on resize by applyViewportSize.
+    // wrong apparent rate. Kept matched on resize by applyViewportSize.
     final parallaxSize = gameRef.viewportLayoutFor(pos).size;
 
     // The opponent's world has no camera in the single view, so its backdrop
-    // would never be drawn -- skip the four image layers rather than load them
+    // would never be drawn -- skip the image layers rather than load them
     // to render nothing.
     final needsParallax =
         !(gameRef.singleViewOpponent && pos == TeamDisplayPosition.right);
@@ -754,7 +784,7 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
           ParallaxImageData('assets/images/stars_0.png'),
           ParallaxImageData('assets/images/stars_1.png'),
           ParallaxImageData('assets/images/stars_2.png'),
-          ParallaxImageData('assets/images/bg_scaffold.png'),
+          // The girders are drawn in the world instead; see _scaffoldShader.
         ],
         baseVelocity: Vector2(0, 0),
         repeat: ImageRepeat.repeatY,
