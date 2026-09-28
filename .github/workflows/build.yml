@@ -113,6 +113,21 @@ jobs:
             echo "keyPassword=$KEY_PASSWORD"
           } > key.properties
 
+      - name: Ad-hoc signing for macOS
+        # The project signs with the maintainer's Apple team, whose
+        # certificate is not on the runner. Project build settings beat
+        # xcconfig files, so switch the project itself to ad-hoc ("-"),
+        # which keeps the sandbox entitlements. CI only; nothing is committed.
+        if: matrix.target == 'macos'
+        run: |
+          sed -i '' -E \
+            -e 's/DEVELOPMENT_TEAM = [A-Z0-9]+;/DEVELOPMENT_TEAM = "";/' \
+            -e 's/"CODE_SIGN_IDENTITY\[sdk=macosx\*\]" = "Apple Development";/"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";/' \
+            -e 's/CODE_SIGN_IDENTITY = "Apple Development";/CODE_SIGN_IDENTITY = "-";/' \
+            -e 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' \
+            macos/Runner.xcodeproj/project.pbxproj
+          grep -n 'CODE_SIGN_IDENTITY\|DEVELOPMENT_TEAM\|CODE_SIGN_STYLE' macos/Runner.xcodeproj/project.pbxproj
+
       - name: Build
         # Web builds are self-contained (no CDN), so the COOP/COEP headers on
         # rt-lobby cannot block the renderer.

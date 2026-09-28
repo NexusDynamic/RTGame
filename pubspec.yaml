@@ -1,7 +1,7 @@
 name: rise_together_game
 description: "Rise Together: a cooperative and competitive physics game. Play solo, as a team, or against others."
 publish_to: "none"
-version: 0.1.0+1
+version: 1.0.0+0
 
 environment:
   sdk: ^3.9.0

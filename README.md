@@ -79,4 +79,7 @@ reporting vulnerabilities.
 
 See [PRIVACY.md](PRIVACY.md) for what online play shares.
 
-Derived from the RiseTogether research platform by NexusDynamic.
+## Credits
+
+Code, artwork and music by [zeyus](https://me.zys.im/). Derived from the RiseTogether research
+platform.
