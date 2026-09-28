@@ -1,0 +1,14 @@
+dependency_overrides:
+  code_assets: ^2.1.0 # v1 specified in flame_forge2d
+  flame:
+    git:
+      url: https://github.com/flame-engine/flame
+      ref: 5390a7db0e315cbce9cea863063cfb6fe114a7f6
+      path: packages/flame
+  # peer_coordinator ships its conformance suite, so it depends on `test`
+  # (not just dev), which needs a newer test_api than flutter_test pins.
+  test_api: ^0.7.13
+  # TEMPORARY: native data-channel open-event fix, until the next
+  # webrtc_coordinator_flutter release. Remove once published.
+  webrtc_coordinator_flutter:
+    path: ../liblsl.dart/packages/webrtc_coordinator_flutter

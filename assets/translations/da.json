@@ -1,0 +1,137 @@
+{
+  "app": {
+    "title": "Sammen Op"
+  },
+  "home": {
+    "solo": "Spil alene",
+    "soloSubtitle": "Kom så højt op som muligt, før tiden løber ud",
+    "online": "Spil online",
+    "onlineSubtitle": "Spil sammen med eller mod andre",
+    "onlineComingSoon": "Onlinespil kommer snart",
+    "settings": "Indstillinger",
+    "bestSolo": "Bedste: niveau {} · {}"
+  },
+  "game": {
+    "quit": "Afslut",
+    "quitTitle": "Forlad spillet?",
+    "quitMessage": "Dine fremskridt i denne runde går tabt.",
+    "stay": "Spil videre",
+    "leave": "Forlad"
+  },
+  "results": {
+    "timeUp": "Tiden er gået!",
+    "roundOver": "Runden er slut",
+    "levelReached": "Niveau nået",
+    "level": "Niveau {}",
+    "distance": "Afstand",
+    "newBest": "Ny personlig rekord!",
+    "youWin": "Dit hold vinder!",
+    "youLose": "Det andet hold vinder",
+    "tie": "Uafgjort!",
+    "yourTeam": "Dit hold",
+    "otherTeam": "Det andet hold",
+    "playAgain": "Spil igen",
+    "backToMenu": "Tilbage til menuen",
+    "waitingForHost": "Venter på, at værten starter en ny runde…",
+    "series": "Serie (jer – dem)"
+  },
+  "levelTransition": {
+    "getReady": "Niveau {}\nGør dig klar!"
+  },
+  "countdown": {
+    "go": "KØR!",
+    "three": "3",
+    "two": "2",
+    "one": "1"
+  },
+  "inGame": {
+    "liftLeft": "Løft VENSTRE",
+    "liftRight": "Løft HØJRE"
+  },
+  "settings": {
+    "title": "Indstillinger",
+    "sections": {
+      "player": "Spiller",
+      "game": "Solospil",
+      "display": "Visning og styring",
+      "colors": "Holdfarver",
+      "language": "Sprog"
+    },
+    "nickname": {
+      "title": "Kaldenavn",
+      "hint": "Vises for andre spillere online"
+    },
+    "roundDuration": {
+      "title": "Rundens længde",
+      "value": "{} sekunder"
+    },
+    "singleView": {
+      "title": "Vis modstanderen som et spøgelse",
+      "description": "Tegn det andet hold i din egen bane i stedet for delt skærm"
+    },
+    "buttonHeight": {
+      "title": "Knapperes placering",
+      "description": "Hvor højt oppe på skærmen løfteknapperne sidder"
+    },
+    "buttonSize": {
+      "title": "Knapstørrelse"
+    },
+    "colors": {
+      "teamA": "Hold A",
+      "teamB": "Hold B",
+      "pickerTitle": "Vælg farve for {}",
+      "cancel": "Annuller",
+      "select": "Vælg"
+    },
+    "resetDefaults": "Nulstil til standard"
+  },
+  "online": {
+    "waitingForHost": "Venter på værten…",
+    "ended": {
+      "hostLeft": "Værten forlod spillet.",
+      "connectionLost": "Forbindelsen blev afbrudt.",
+      "removed": "Du blev fjernet fra spillet."
+    },
+    "title": "Spil online",
+    "mode": {
+      "coop": "Samarbejde",
+      "versus": "Mod hinanden"
+    },
+    "modeHelp": {
+      "coop": "Alle løfter den samme platform",
+      "versus": "To hold kæmper om at nå toppen"
+    },
+    "players": "Spillere",
+    "teamSizes": {
+      "2v": "1 mod 1",
+      "4v": "2 mod 2"
+    },
+    "quickMatch": "Hurtigt spil",
+    "quickMatchHelp": "Spil med dem, der leder lige nu",
+    "createRoom": "Opret privat rum",
+    "createRoomHelp": "Få en kode, du kan dele med venner",
+    "haveCode": "Har du en rumkode?",
+    "codeHint": "ABC234",
+    "join": "Deltag",
+    "cancel": "Annuller",
+    "back": "Tilbage",
+    "status": {
+      "admitting": "Tjekker ind…",
+      "searching": "Leder efter spillere… {} af {}",
+      "roomCode": "Din rumkode",
+      "shareCode": "Del koden. Spillet starter, når {} af {} har tilsluttet sig.",
+      "connecting": "Forbinder til de andre spillere…",
+      "hosting": "Du er vært. Gør spillet klar…"
+    },
+    "failure": {
+      "unreachable": "Kunne ikke nå spilserveren. Tjek din forbindelse og prøv igen.",
+      "rateLimited": "For mange forsøg fra dit netværk. Vent et minut og prøv igen.",
+      "busy": "Serveren er fuld lige nu. Prøv igen om lidt.",
+      "roomNotFound": "Der findes intet rum med den kode. Det er måske udløbet.",
+      "roomFull": "Det rum er allerede fuldt.",
+      "hostLeft": "Rummets vært gik.",
+      "couldNotConnect": "Kunne ikke forbinde til de andre spillere.",
+      "invalidResponse": "Noget gik galt i kommunikationen med serveren."
+    }
+  }
+}

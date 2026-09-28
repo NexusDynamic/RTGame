@@ -1,0 +1,137 @@
+{
+  "app": {
+    "title": "Rise Together"
+  },
+  "home": {
+    "solo": "Play solo",
+    "soloSubtitle": "Climb as high as you can before time runs out",
+    "online": "Play online",
+    "onlineSubtitle": "Team up or compete with other players",
+    "onlineComingSoon": "Online play is coming soon",
+    "settings": "Settings",
+    "bestSolo": "Best: level {} · {}"
+  },
+  "game": {
+    "quit": "Quit",
+    "quitTitle": "Leave the game?",
+    "quitMessage": "Your progress in this round will be lost.",
+    "stay": "Keep playing",
+    "leave": "Leave"
+  },
+  "results": {
+    "timeUp": "Time's up!",
+    "roundOver": "Round over",
+    "levelReached": "Level reached",
+    "level": "Level {}",
+    "distance": "Distance",
+    "newBest": "New personal best!",
+    "youWin": "Your team wins!",
+    "youLose": "The other team wins",
+    "tie": "It's a tie!",
+    "yourTeam": "Your team",
+    "otherTeam": "Other team",
+    "playAgain": "Play again",
+    "backToMenu": "Back to menu",
+    "waitingForHost": "Waiting for the host to start another round…",
+    "series": "Series (you – them)"
+  },
+  "levelTransition": {
+    "getReady": "Level {}\nGet Ready!"
+  },
+  "countdown": {
+    "go": "GO!",
+    "three": "3",
+    "two": "2",
+    "one": "1"
+  },
+  "inGame": {
+    "liftLeft": "Lift LEFT",
+    "liftRight": "Lift RIGHT"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "player": "Player",
+      "game": "Solo game",
+      "display": "Display & controls",
+      "colors": "Team colours",
+      "language": "Language"
+    },
+    "nickname": {
+      "title": "Nickname",
+      "hint": "Shown to other players online"
+    },
+    "roundDuration": {
+      "title": "Round length",
+      "value": "{} seconds"
+    },
+    "singleView": {
+      "title": "Show opponent as a ghost",
+      "description": "Draw the other team in your own arena instead of a split screen"
+    },
+    "buttonHeight": {
+      "title": "Button position",
+      "description": "How far up the screen the lift buttons sit"
+    },
+    "buttonSize": {
+      "title": "Button size"
+    },
+    "colors": {
+      "teamA": "Team A",
+      "teamB": "Team B",
+      "pickerTitle": "Choose {} colour",
+      "cancel": "Cancel",
+      "select": "Select"
+    },
+    "resetDefaults": "Reset to defaults"
+  },
+  "online": {
+    "waitingForHost": "Waiting for the host…",
+    "ended": {
+      "hostLeft": "The host left the game.",
+      "connectionLost": "Connection lost.",
+      "removed": "You were removed from the game."
+    },
+    "title": "Play online",
+    "mode": {
+      "coop": "Co-op",
+      "versus": "Versus"
+    },
+    "modeHelp": {
+      "coop": "Everyone lifts the same paddle",
+      "versus": "Two teams race to the top"
+    },
+    "players": "Players",
+    "teamSizes": {
+      "2v": "1 vs 1",
+      "4v": "2 vs 2"
+    },
+    "quickMatch": "Quick match",
+    "quickMatchHelp": "Play with whoever is looking right now",
+    "createRoom": "Create private room",
+    "createRoomHelp": "Get a code to share with friends",
+    "haveCode": "Have a room code?",
+    "codeHint": "ABC234",
+    "join": "Join",
+    "cancel": "Cancel",
+    "back": "Back",
+    "status": {
+      "admitting": "Checking in…",
+      "searching": "Looking for players… {} of {}",
+      "roomCode": "Your room code",
+      "shareCode": "Share this code. The game starts when {} of {} have joined.",
+      "connecting": "Connecting to the other players…",
+      "hosting": "You're hosting. Setting up the match…"
+    },
+    "failure": {
+      "unreachable": "Couldn't reach the game server. Check your connection and try again.",
+      "rateLimited": "Too many attempts from your network. Wait a minute and try again.",
+      "busy": "The server is full right now. Try again in a little while.",
+      "roomNotFound": "No room with that code. It may have expired.",
+      "roomFull": "That room is already full.",
+      "hostLeft": "The room's host left.",
+      "couldNotConnect": "Couldn't connect to the other players.",
+      "invalidResponse": "Something went wrong talking to the server."
+    }
+  }
+}

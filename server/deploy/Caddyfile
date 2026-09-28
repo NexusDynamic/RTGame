@@ -1,0 +1,33 @@
+# TLS and the public edge. The lobby speaks plain HTTP/ws and never
+# terminates TLS itself.
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Lobby API and room signaling hubs. Caddy proxies WebSocket upgrades as is.
+	@lobby path /api/* /room/* /health
+	handle @lobby {
+		reverse_proxy lobby:8080 {
+			# Overwrite, never append: a client-supplied X-Forwarded-For must not
+			# reach the lobby, which rate-limits by this address.
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# The web build of the game.
+	handle {
+		root * /srv
+		# WebAssembly builds need cross-origin isolation for multithreading.
+		header {
+			Cross-Origin-Opener-Policy same-origin
+			Cross-Origin-Embedder-Policy require-corp
+			X-Content-Type-Options nosniff
+			Referrer-Policy no-referrer
+		}
+		try_files {path} /index.html
+		file_server
+	}
+
+	# No access log on purpose: it would record every player's IP address,
+	# which PRIVACY.md promises is not kept. Caddy logs nothing per request
+	# unless a `log` directive asks it to.
+}
