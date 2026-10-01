@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload
         if: matrix.target != 'pages'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rt-${{ matrix.target }}
           path: dist/*
