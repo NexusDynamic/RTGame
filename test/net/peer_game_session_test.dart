@@ -44,6 +44,7 @@ void main() {
     // Outlasts the ten-discovery-interval (500 ms) search for the host.
     joinAttemptWindow: Duration(seconds: 3),
     joinRetryDelay: Duration(milliseconds: 100),
+    rejoinGrace: Duration(seconds: 3),
   );
 
   RtcTransportConfig transport() => RtcTransportConfig(
@@ -355,4 +356,73 @@ void main() {
       SessionEnd.hostLeft,
     );
   }, timeout: const Timeout(Duration(seconds: 30)));
+
+  /// Fails every link [session]'s device holds, as an ICE failure or a
+  /// device going to sleep would.
+  Future<void> dropLinks(PeerGameSession session) async {
+    final adapter = bus.adapterFor(session.localAssignment.nodeId)!;
+    for (final link in adapter.links.toList()) {
+      await (link as dynamic).simulateFailure();
+    }
+  }
+
+  test(
+    'a follower that drops out rejoins, and its input counts again',
+    () async {
+      final (host, followers) = await startMatch(2);
+      final follower = followers.single;
+      final ends = <SessionEnd>[];
+      follower.ended.listen(ends.add);
+      final reconnecting = <bool>[];
+      final back = Completer<void>();
+      follower.reconnecting.listen((value) {
+        reconnecting.add(value);
+        if (!value && !back.isCompleted) back.complete();
+      });
+
+      await dropLinks(follower);
+
+      final heard = host.actions
+          .firstWhere(
+            (a) =>
+                a.playerId == follower.localAssignment.playerId &&
+                a.action == PaddleAction.right,
+          )
+          .timeout(const Duration(seconds: 10));
+      // Held input is re-sent; keep pressing while it reconnects.
+      final pressing = Timer.periodic(
+        const Duration(milliseconds: 200),
+        (_) => follower.sendAction(PaddleAction.right),
+      );
+      try {
+        await heard;
+      } finally {
+        pressing.cancel();
+      }
+      expect(ends, isEmpty, reason: 'a rejoin is not the end of the match');
+      // The screen is told it is reconnecting, and then that it is back.
+      await back.future.timeout(const Duration(seconds: 10));
+      expect(reconnecting, [true, false]);
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
+
+  test(
+    'a follower whose host is gone for good is told after the grace',
+    () async {
+      final (host, followers) = await startMatch(2);
+      final follower = followers.single;
+      final ended = follower.ended.first;
+
+      // The host vanishes without a word: its links fail, then it goes.
+      await dropLinks(host);
+      await host.leave();
+
+      expect(
+        await ended.timeout(const Duration(seconds: 10)),
+        isIn([SessionEnd.hostLeft, SessionEnd.connectionLost]),
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 30)),
+  );
 }

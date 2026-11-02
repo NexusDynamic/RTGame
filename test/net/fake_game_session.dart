@@ -76,6 +76,9 @@ class FakeGameSession implements GameSession {
   Stream<SessionEnd> get ended => const Stream.empty();
 
   @override
+  Stream<bool> get reconnecting => const Stream.empty();
+
+  @override
   Future<void> markReady({int round = 0}) async {}
 
   @override

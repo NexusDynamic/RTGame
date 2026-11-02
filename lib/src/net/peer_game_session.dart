@@ -19,6 +19,7 @@ class SessionTimings {
     this.hostJoinWindow = const Duration(seconds: 3),
     this.joinAttemptWindow = const Duration(seconds: 15),
     this.joinRetryDelay = const Duration(seconds: 1),
+    this.rejoinGrace = const Duration(seconds: 20),
   });
 
   /// `peer_coordinator` hands `join(timeout - 1s)` to the election, so a
@@ -49,6 +50,11 @@ class SessionTimings {
   final Duration joinAttemptWindow;
 
   final Duration joinRetryDelay;
+
+  /// How long a follower that lost the host keeps trying to get back in
+  /// before the match ends for it. Covers a phone locked for a moment or a
+  /// network handover; long enough to outlast [nodeTimeout] on the host.
+  final Duration rejoinGrace;
 }
 
 /// A [GameSession] over `peer_coordinator`.
@@ -57,7 +63,13 @@ class SessionTimings {
 /// lobby decides which) and only it may coordinate. Leaving it to an election
 /// raced: two devices arriving together could each defer to the other. The
 /// host assigns teams, creates the streams and runs the physics, and its loss
-/// ends the match ([CoordinatorLossPolicy.endSession]).
+/// ends the match.
+///
+/// A follower the host evicts (backgrounded past [SessionTimings.nodeTimeout],
+/// say) rejoins rather than dropping out ([CoordinatorLossPolicy.rejoin]): it
+/// keeps its uId and so its roster slot, and the library restores its data
+/// streams. If it is not back within [SessionTimings.rejoinGrace] the match
+/// ends for it, as any other loss of the host does.
 ///
 /// ## Channels
 ///
@@ -72,7 +84,7 @@ class SessionTimings {
 /// Participants ignore every user message from anyone but the host, and the
 /// host ignores user messages entirely: nothing it needs travels that way.
 class PeerGameSession with AppLogging implements GameSession {
-  PeerGameSession._(this._session, this._playerCount);
+  PeerGameSession._(this._session, this._playerCount, this._timings);
 
   static const String matchMessageType = 'rt_match';
   static const String eventMessageType = 'rt_event';
@@ -98,6 +110,7 @@ class PeerGameSession with AppLogging implements GameSession {
 
   final PeerSession _session;
   final int _playerCount;
+  final SessionTimings _timings;
 
   /// Whether this device hosts. Only a `host: true` connect can be.
   bool get _isHost => _session.isCoordinator;
@@ -117,6 +130,7 @@ class PeerGameSession with AppLogging implements GameSession {
   final _physics = StreamController<List<double>>.broadcast();
   final _events = StreamController<GameEvent>.broadcast();
   final _ended = StreamController<SessionEnd>.broadcast();
+  final _reconnecting = StreamController<bool>.broadcast();
   final _assignmentsChanged = StreamController<void>.broadcast();
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
@@ -172,6 +186,7 @@ class PeerGameSession with AppLogging implements GameSession {
       final game = PeerGameSession._(
         _createSession(transport, roomName, name, playerCount, host, timings),
         playerCount,
+        timings,
       );
       try {
         await game._join(
@@ -212,7 +227,11 @@ class PeerGameSession with AppLogging implements GameSession {
         nodeTimeout: timings.nodeTimeout,
         // The host's own messages are not needed back.
         consumeCoordinationStreamAsCoordinator: false,
-        coordinatorLossPolicy: CoordinatorLossPolicy.endSession,
+        // A joiner keeps trying to get back in after losing the host; the
+        // match decides in _onSessionEnded how long that is worth waiting.
+        coordinatorLossPolicy: host
+            ? CoordinatorLossPolicy.endSession
+            : CoordinatorLossPolicy.rejoin,
       ),
       // Rolls are fixed, not random, to make the election deterministic: a
       // node defers to any peer with a lower roll or to a live coordinator.
@@ -467,6 +486,7 @@ class PeerGameSession with AppLogging implements GameSession {
     } else {
       _subscriptions.add(_physicsStream!.inbox.listen(_onPhysicsSample));
       _subscriptions.add(_session.events.userMessages.listen(_onUserMessage));
+      _subscriptions.add(_session.events.sessionRejoined.listen(_onRejoined));
       _resendTimer = Timer.periodic(
         inputResendInterval,
         (_) => _publishLocalAction(),
@@ -579,15 +599,50 @@ class PeerGameSession with AppLogging implements GameSession {
     if (decoded != null) _events.add(decoded);
   }
 
+  /// Waiting out a follower's rejoin; see [_onSessionEnded].
+  Timer? _rejoinGrace;
+
+  /// Back in after losing the host. Anything sent during the outage may be
+  /// lost, so the held input and the last readiness go out again now.
+  void _onRejoined(SessionRejoinedEvent event) {
+    if (_closed) return;
+    _rejoinGrace?.cancel();
+    _rejoinGrace = null;
+    _reconnecting.add(false);
+    appLog.info(
+      'Rejoined the host after ${event.outage.inMilliseconds} ms '
+      '(${event.attempts} attempt(s))',
+    );
+    _publishLocalAction();
+    final round = _lastReadyRound;
+    if (round != null) unawaited(markReady(round: round).catchError((_) {}));
+  }
+
   void _onSessionEnded(SessionEndedEvent event) {
     if (_closed) return;
-    _ended.add(switch (event.reason) {
-      SessionEndReason.coordinatorLeft ||
-      SessionEndReason.coordinatorTimedOut => SessionEnd.hostLeft,
-      SessionEndReason.coordinatorTransportLost => SessionEnd.connectionLost,
-      SessionEndReason.evicted => SessionEnd.removed,
-    });
+    // A follower that lost the host other than by the host leaving is often
+    // just asleep or briefly offline (evicted, or its own timer fired first);
+    // the library is already rejoining. Wait a bounded while before calling
+    // the match over: a host that really died never answers.
+    if (!_isHost && event.reason != SessionEndReason.coordinatorLeft) {
+      if (_rejoinGrace != null) return;
+      appLog.warning('Lost the host (${event.reason.name}); rejoining');
+      _reconnecting.add(true);
+      _rejoinGrace = Timer(_timings.rejoinGrace, () {
+        _rejoinGrace = null;
+        if (!_closed) _ended.add(_endFor(event.reason));
+      });
+      return;
+    }
+    _ended.add(_endFor(event.reason));
   }
+
+  static SessionEnd _endFor(SessionEndReason reason) => switch (reason) {
+    SessionEndReason.coordinatorLeft ||
+    SessionEndReason.coordinatorTimedOut => SessionEnd.hostLeft,
+    SessionEndReason.coordinatorTransportLost => SessionEnd.connectionLost,
+    SessionEndReason.evicted => SessionEnd.removed,
+  };
 
   // --- GameSession --------------------------------------------------------
 
@@ -636,9 +691,13 @@ class PeerGameSession with AppLogging implements GameSession {
     );
   }
 
+  /// The last round this follower reported ready for, re-sent on rejoin.
+  int? _lastReadyRound;
+
   @override
   Future<void> markReady({int round = 0}) async {
     if (_closed || _isHost) return;
+    _lastReadyRound = round;
     await _session.sendUserMessage(readyMessageType, 'ready', {'round': round});
   }
 
@@ -700,11 +759,15 @@ class PeerGameSession with AppLogging implements GameSession {
   Stream<SessionEnd> get ended => _ended.stream;
 
   @override
+  Stream<bool> get reconnecting => _reconnecting.stream;
+
+  @override
   Future<void> leave() async {
     if (_closed) return;
     _closed = true;
     await _setupSubscription?.cancel();
     _resendTimer?.cancel();
+    _rejoinGrace?.cancel();
     _budgetReset?.cancel();
     _staleInputCheck?.cancel();
     for (final subscription in _subscriptions) {
@@ -721,6 +784,7 @@ class PeerGameSession with AppLogging implements GameSession {
       _physics.close(),
       _events.close(),
       _ended.close(),
+      _reconnecting.close(),
       _assignmentsChanged.close(),
       _readyChanged.close(),
     ]);

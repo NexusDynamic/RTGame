@@ -99,6 +99,11 @@ abstract class GameSession {
   /// Fires once if the session ends without this device choosing to leave.
   Stream<SessionEnd> get ended;
 
+  /// On a follower: true when the connection to the authority is lost and
+  /// being re-established, false when it is back. If it does not come back,
+  /// [ended] fires instead.
+  Stream<bool> get reconnecting;
+
   /// Leave the session and release its resources.
   Future<void> leave();
 }
