@@ -28,9 +28,8 @@ class TeamActionStream {
   TeamActionStream({
     required this.position,
     required this.maxPlayers,
-    Map<String, int> Function()? getPlayerBitflags,
-  }) : _getPlayerBitflags = getPlayerBitflags,
-       // default teamId based on position
+    this._getPlayerBitflags,
+  }) : // default teamId based on position
        teamId = position == TeamDisplayPosition.left ? 0 : 1;
 
   /// Set the configured team player count for proper thrust calculation

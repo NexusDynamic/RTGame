@@ -49,8 +49,8 @@ class WorldController with AppLogging, Resetable {
     required this.world,
     this.shouldUpdateParallax = true,
     required this.configuredTeamPlayerCount,
-    required TeamContext teamContext,
-  }) : _teamContext = teamContext {
+    required this._teamContext,
+  }) {
     // Vital
     world.setWorldController(this);
     _thrustSubscription = actionStream.thrustStream.listen((thrust) {

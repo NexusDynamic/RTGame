@@ -63,8 +63,8 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
     this._world,
     this._start,
     this._end, {
-    double baseWidthMultiplier = 1.0,
-  }) : _baseWidthMultiplier = baseWidthMultiplier;
+    this._baseWidthMultiplier = 1.0,
+  });
 
   @override
   Future<void> onLoad() async {

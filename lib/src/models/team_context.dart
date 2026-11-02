@@ -33,14 +33,13 @@ class TeamContext with AppSettings {
   late TeamColorPalette? _colorPalette;
 
   TeamContext({
-    required int teamId,
+    required this._teamId,
     required this.displayPosition,
     required this.isPlayerTeam,
     required players,
     required this.actionStream,
-    TeamColorPalette? colorPalette,
-  }) : _teamId = teamId,
-       _colorPalette = colorPalette {
+    this._colorPalette,
+  }) {
     // Initialize color palette
     this.players.addAll(players);
     _colorPalette ??= _getDefaultColorPalette();
