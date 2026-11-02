@@ -182,6 +182,29 @@ void main() {
   group('matchmaking', () {
     setUp(() => startServer(turnUrls: const ['turn:turn.example:3478']));
 
+    test('stats count players looking for a match', () async {
+      Future<LobbyStats> stats() async {
+        final response = await http.get(base.resolve('/api/stats'));
+        expect(response.statusCode, 200);
+        return LobbyStats.tryFromJson(jsonDecode(response.body))!;
+      }
+
+      var now = await stats();
+      expect((now.searching, now.playing), (0, 0));
+
+      final (a, qa) = await lobby();
+      send(a, const QuickMatch(mode: LobbyMode.versus, players: 2));
+      await next<Waiting>(qa);
+      now = await stats();
+      expect((now.searching, now.playing), (1, 0));
+      expect(now.online, 1);
+
+      await a.sink.close();
+      await qa.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect((await stats()).searching, 0);
+    });
+
     test('quick match pairs two players with one host', () async {
       final (a, qa) = await lobby();
       final (b, qb) = await lobby();

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:logging/logging.dart';
 import 'package:peer_coordinator/hub.dart';
@@ -56,6 +57,10 @@ class Room {
 
   bool get isClosed => _closed;
   int get connectionCount => _proxies.length;
+
+  /// Players connected right now. A reconnect can briefly overlap the
+  /// dropped socket, so sockets are capped at the room's size.
+  int get playerCount => min(connectionCount, players);
 
   static Future<Room> open({
     required String id,

@@ -79,8 +79,25 @@ class AudioManager with AppLogging, AppSettings {
   int _trackIndex = 0;
 
   /// Starting music failed, most likely a browser refusing to autoplay before
-  /// the first tap. [retryMusicAfterGesture] tries again.
+  /// the first tap. [onUserGesture] tries again.
   bool _startFailed = false;
+
+  /// Whether the user has interacted with the page yet. Browsers keep audio
+  /// suspended until then, and audioplayers' web player waits on that
+  /// suspended audio forever rather than failing, so on web nothing is
+  /// played, and no player created, before the first tap.
+  bool _unlocked = !kIsWeb;
+
+  @visibleForTesting
+  set unlockedForTesting(bool value) => _unlocked = value;
+
+  /// A bgm start that has not returned by now is treated as refused, so the
+  /// music lock is never held for good.
+  static const Duration _startTimeout = Duration(seconds: 5);
+
+  /// One reused player per sound effect. A fresh player per beep would make
+  /// (and never close) a new audio context on web each time.
+  final Map<String, AudioPlayer> _sfxPlayers = {};
 
   final _musicLock = Lock();
   StreamSubscription<void>? _trackEnded;
@@ -146,9 +163,11 @@ class AudioManager with AppLogging, AppSettings {
   }
 
   /// Browsers only allow audio after the user has interacted with the page,
-  /// so music that was refused at startup is started again from here. Cheap
-  /// to call on every tap: it does nothing unless a start failed.
-  Future<void> retryMusicAfterGesture() async {
+  /// so this unlocks audio and starts music that was held back or refused at
+  /// startup. Cheap to call on every tap: after the first, it does nothing
+  /// unless a start failed.
+  Future<void> onUserGesture() async {
+    _unlocked = true;
     if (!_startFailed) return;
     _startFailed = false;
     _playingScene = null;
@@ -168,6 +187,11 @@ class AudioManager with AppLogging, AppSettings {
   Future<void> _updateMusic() => _musicLock.synchronized(() async {
     final scene = _wantedScene;
     if (scene == _playingScene) return;
+    if (scene != null && !_unlocked) {
+      // Held until the first tap; see [_unlocked].
+      _startFailed = true;
+      return;
+    }
     final previous = _playingScene;
     _playingScene = scene;
     try {
@@ -196,7 +220,9 @@ class AudioManager with AppLogging, AppSettings {
     final tracks = musicTracks[scene]!;
     _fadeGeneration++; // whatever was fading belonged to the old track
     _musicGain = 0;
-    await FlameAudio.bgm.play(tracks[_trackIndex], volume: 0);
+    await FlameAudio.bgm
+        .play(tracks[_trackIndex], volume: 0)
+        .timeout(_startTimeout);
     if (tracks.length > 1) {
       await FlameAudio.bgm.audioPlayer.setReleaseMode(ReleaseMode.stop);
     }
@@ -247,9 +273,18 @@ class AudioManager with AppLogging, AppSettings {
   Future<void> playLo() => _playSfx('assets/audio/sfx/lo.mp3');
 
   Future<void> _playSfx(String path) async {
-    if (!sfxEnabled.value) return;
+    if (!sfxEnabled.value || !_unlocked) return;
     try {
-      await FlameAudio.play(path, volume: _gainFor(sfxVolume.value));
+      var player = _sfxPlayers[path];
+      if (player == null) {
+        player = AudioPlayer()..audioCache = FlameAudio.audioCache;
+        await player.setReleaseMode(ReleaseMode.stop);
+        await player.setSource(AssetSource(path));
+        _sfxPlayers[path] = player;
+      }
+      await player.stop();
+      await player.setVolume(_gainFor(sfxVolume.value));
+      await player.resume();
     } catch (e) {
       appLog.severe('Failed to play $path: $e');
     }
@@ -257,6 +292,10 @@ class AudioManager with AppLogging, AppSettings {
 
   /// Dispose audio resources
   void dispose() {
+    for (final player in _sfxPlayers.values) {
+      unawaited(player.dispose());
+    }
+    _sfxPlayers.clear();
     FlameAudio.audioCache.clearAll();
     _initialized = false;
   }

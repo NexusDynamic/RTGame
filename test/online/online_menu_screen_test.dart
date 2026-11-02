@@ -1,17 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/online/online_menu_screen.dart';
+import 'package:rise_together_lobby/protocol.dart';
 
 import '../helpers/test_helpers.dart';
 
 void main() {
   setUpAll(silenceLogs);
 
-  Future<void> pump(WidgetTester tester) => tester.pumpWidget(
+  Future<void> pump(
+    WidgetTester tester, {
+    Future<LobbyStats?> Function()? stats,
+  }) => tester.pumpWidget(
     MaterialApp(
-      home: OnlineMenuScreen(lobbyUrl: Uri.parse('https://lobby.example')),
+      home: OnlineMenuScreen(
+        lobbyUrl: Uri.parse('https://lobby.example'),
+        fetchStats: stats ?? () async => null,
+      ),
     ),
   );
+
+  testWidgets('shows how many players are online when the lobby says', (
+    tester,
+  ) async {
+    var calls = 0;
+    await pump(
+      tester,
+      stats: () async {
+        calls++;
+        return const LobbyStats(searching: 2, playing: 4);
+      },
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('players-online')), findsOneWidget);
+    expect(calls, 1);
+
+    // Refreshed while the menu stays open.
+    await tester.pump(const Duration(seconds: 15));
+    expect(calls, 2);
+  });
+
+  testWidgets('hides the count when the lobby cannot say', (tester) async {
+    await pump(tester);
+    await tester.pump();
+    expect(find.byKey(const Key('players-online')), findsNothing);
+  });
 
   testWidgets('versus offers only even team sizes', (tester) async {
     await pump(tester);

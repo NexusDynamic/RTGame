@@ -1,16 +1,23 @@
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:rise_together_lobby/protocol.dart';
 import 'package:rise_together_game/src/editor/level_library_screen.dart';
 import 'package:rise_together_game/src/levels/level_library.dart';
+import 'package:rise_together_game/src/online/lobby_client.dart';
 import 'package:rise_together_game/src/online/matchmaking_screen.dart';
 
 /// Choose how to play online: quick match, a private room, or a code.
 class OnlineMenuScreen extends StatefulWidget {
-  const OnlineMenuScreen({super.key, required this.lobbyUrl});
+  const OnlineMenuScreen({super.key, required this.lobbyUrl, this.fetchStats});
 
   final Uri lobbyUrl;
+
+  /// Where the players-online count comes from; the lobby by default.
+  /// Tests pass their own.
+  final Future<LobbyStats?> Function()? fetchStats;
 
   @override
   State<OnlineMenuScreen> createState() => _OnlineMenuScreenState();
@@ -20,6 +27,33 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
   LobbyMode _mode = LobbyMode.versus;
   int _players = 2;
   final _code = TextEditingController();
+
+  /// How often the players-online line is refreshed while the menu is open.
+  static const _statsInterval = Duration(seconds: 15);
+
+  LobbyClient? _client;
+  Timer? _statsTimer;
+  LobbyStats? _stats;
+  bool _fetching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.fetchStats == null) _client = LobbyClient(widget.lobbyUrl);
+    unawaited(_refreshStats());
+    _statsTimer = Timer.periodic(_statsInterval, (_) => _refreshStats());
+  }
+
+  Future<void> _refreshStats() async {
+    if (_fetching) return;
+    _fetching = true;
+    try {
+      final stats = await (widget.fetchStats ?? _client!.stats)();
+      if (mounted) setState(() => _stats = stats);
+    } finally {
+      _fetching = false;
+    }
+  }
 
   /// Levels to play on instead of the built-in ones, if the player chose some.
   CustomSelection? _custom;
@@ -39,19 +73,65 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
 
   @override
   void dispose() {
+    _statsTimer?.cancel();
+    _client?.close();
     _code.dispose();
     super.dispose();
   }
 
-  void _go(ClientMessage request) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => MatchmakingScreen(
-        lobbyUrl: widget.lobbyUrl,
-        request: request,
-        customLevels: request is JoinRoom ? null : _custom?.pack,
+  Future<void> _go(ClientMessage request) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MatchmakingScreen(
+          lobbyUrl: widget.lobbyUrl,
+          request: request,
+          customLevels: request is JoinRoom ? null : _custom?.pack,
+        ),
       ),
-    ),
-  );
+    );
+    // Back from a match or a search: the count has likely changed.
+    unawaited(_refreshStats());
+  }
+
+  /// "5 players online · 2 looking for a match", or nothing when the lobby
+  /// could not say.
+  Widget _statsLine(ThemeData theme) {
+    final stats = _stats;
+    if (stats == null) return const SizedBox.shrink();
+    final text = [
+      // English and Danish only need these three forms.
+      'online.playersOnline.${switch (stats.online) {
+            0 => 'zero',
+            1 => 'one',
+            _ => 'other',
+          }}'
+          .tr(args: ['${stats.online}']),
+      if (stats.searching > 0)
+        'online.lookingForMatch'.tr(args: ['${stats.searching}']),
+    ].join(' · ');
+    return Padding(
+      key: const Key('players-online'),
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.people_alt_outlined,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   String _sizeLabel(int size) =>
       _mode == LobbyMode.versus ? 'online.teamSizes.${size}v'.tr() : '$size';
@@ -68,6 +148,7 @@ class _OnlineMenuScreenState extends State<OnlineMenuScreen> {
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              _statsLine(theme),
               SegmentedButton<LobbyMode>(
                 segments: [
                   for (final mode in LobbyMode.values)

@@ -97,6 +97,18 @@ class LobbyClient {
     return Isolate.run(() => pow.solve(challenge, difficulty, batch: 1 << 20));
   }
 
+  /// How many players are online, or null when the lobby cannot say (it is
+  /// unreachable, busy, or an older server without the endpoint).
+  Future<LobbyStats?> stats() async {
+    try {
+      return LobbyStats.tryFromJson(
+        await _getJson(baseUrl.resolve('/api/stats')),
+      );
+    } on LobbyException {
+      return null;
+    }
+  }
+
   /// Open the matchmaking socket with a session [token].
   Future<LobbyConnection> connect(String token) async {
     final channel = connectLobbySocket(

@@ -134,6 +134,31 @@ final class JoinRoom extends ClientMessage {
 
 // --- server -> client --------------------------------------------------------
 
+/// How busy the lobby is, from `GET /api/stats`: players looking for a match
+/// (in the queues or waiting in a private room) and players in a match.
+final class LobbyStats {
+  const LobbyStats({required this.searching, required this.playing});
+
+  /// No real lobby reports more than this; a bigger number is not one.
+  static const int _limit = 1000000;
+
+  final int searching;
+  final int playing;
+
+  int get online => searching + playing;
+
+  Map<String, dynamic> toJson() => {'searching': searching, 'playing': playing};
+
+  static LobbyStats? tryFromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final searching = json['searching'];
+    final playing = json['playing'];
+    bool valid(Object? n) => n is int && n >= 0 && n <= _limit;
+    if (!valid(searching) || !valid(playing)) return null;
+    return LobbyStats(searching: searching as int, playing: playing as int);
+  }
+}
+
 sealed class ServerMessage {
   const ServerMessage();
 

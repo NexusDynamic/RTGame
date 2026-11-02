@@ -32,6 +32,7 @@ final _access = Logger('lobby.access');
 /// POST /api/admit       {challenge, counter} -> {token}
 /// WS   /api/lobby?token=...   quick match / private rooms (protocol.dart)
 /// WS   /room/<id>       proxied to that match's hub
+/// GET  /api/stats       -> {searching, playing}
 /// GET  /health
 /// ```
 ///
@@ -73,6 +74,10 @@ class LobbyServer {
   final RateLimiter _admitLimit = RateLimiter(capacity: 10, perSecond: 0.5);
   final RateLimiter _socketLimit = RateLimiter(capacity: 20, perSecond: 1);
 
+  /// Looser than the others: cheap to answer, and a classroom behind one
+  /// address polls it from every open online menu.
+  final RateLimiter _statsLimit = RateLimiter(capacity: 30, perSecond: 2);
+
   final Map<String, int> _lobbyConnectionsByIp = {};
   int _lobbyConnections = 0;
 
@@ -92,6 +97,7 @@ class LobbyServer {
     final router = Router()
       ..get('/health', (_) => Response.ok('ok'))
       ..get('/api/challenge', _challenge)
+      ..get('/api/stats', _stats)
       ..post('/api/admit', _admit)
       ..get('/api/lobby', (Request request) => _lobbySocket(request, origins))
       ..get(
@@ -167,6 +173,24 @@ class LobbyServer {
 
   /// The client's log id, from its address.
   String _clientId(Request request) => _pseudonyms.idFor(_clientIp(request));
+
+  /// Player counts for the app's online menu. Counts only, nothing about
+  /// who: no token needed, just a rate limit.
+  Response _stats(Request request) {
+    if (!_statsLimit.allow(_clientKey(request))) {
+      return _json({'error': 'rate_limited'}, status: 429);
+    }
+    var playing = 0;
+    for (final room in _rooms.values) {
+      playing += room.playerCount;
+    }
+    return _json(
+      LobbyStats(
+        searching: _matchmaker.waitingCount,
+        playing: playing,
+      ).toJson(),
+    );
+  }
 
   Response _challenge(Request request) {
     if (!_challengeLimit.allow(_clientKey(request))) {
@@ -439,6 +463,7 @@ class LobbyServer {
     _challengeLimit.prune();
     _admitLimit.prune();
     _socketLimit.prune();
+    _statsLimit.prune();
   }
 }
 

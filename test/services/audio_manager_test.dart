@@ -77,4 +77,24 @@ void main() {
     await audio.leaveMusicScene(MusicScene.lobby);
     expect(audio.wantedMusicScene, isNull);
   });
+
+  test('music waits for the first gesture while audio is locked', () async {
+    final audio = AudioManager.instance;
+    audio.unlockedForTesting = false;
+    addTearDown(() => audio.unlockedForTesting = true);
+
+    // Locked: the scene is wanted, but nothing tries to play (and so nothing
+    // can hang on a suspended browser audio context).
+    await audio.enterMusicScene(MusicScene.lobby);
+    expect(audio.wantedMusicScene, MusicScene.lobby);
+    await audio.playLo(); // skipped quietly while locked
+
+    // The first tap unlocks; repeat taps are harmless.
+    await audio.onUserGesture();
+    await audio.onUserGesture();
+    expect(audio.wantedMusicScene, MusicScene.lobby);
+
+    await audio.leaveMusicScene(MusicScene.lobby);
+    expect(audio.wantedMusicScene, isNull);
+  });
 }

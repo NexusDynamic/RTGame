@@ -74,8 +74,7 @@ class RiseTogetherApp extends StatelessWidget {
       // Browsers block audio until the first interaction, so a tap anywhere
       // starts music that was refused at launch.
       builder: (context, child) => Listener(
-        onPointerDown: (_) =>
-            unawaited(AudioManager.instance.retryMusicAfterGesture()),
+        onPointerDown: (_) => unawaited(AudioManager.instance.onUserGesture()),
         child: child,
       ),
       home: const HomeScreen(),

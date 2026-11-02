@@ -184,7 +184,13 @@
     "quickMatchCustomHelp": "Play with others who chose custom levels",
     "customLevelsNotice": "This match uses player-made levels, not the standard ones. If you'd rather not, cancel now.",
     "customBadge": "CUSTOM LEVELS",
-    "reconnecting": "Connection lost. Reconnecting…"
+    "reconnecting": "Connection lost. Reconnecting…",
+    "playersOnline": {
+      "zero": "No players online",
+      "one": "{} player online",
+      "other": "{} players online"
+    },
+    "lookingForMatch": "{} looking for a match"
   },
   "solo": {
     "title": "Play solo",

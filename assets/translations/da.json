@@ -184,7 +184,13 @@
     "quickMatchCustomHelp": "Spil med andre, der har valgt egne baner",
     "customLevelsNotice": "Denne kamp bruger baner lavet af en spiller, ikke standardbanerne. Vil du ikke det, så annullér nu.",
     "customBadge": "EGNE BANER",
-    "reconnecting": "Forbindelsen blev afbrudt. Genopretter…"
+    "reconnecting": "Forbindelsen blev afbrudt. Genopretter…",
+    "playersOnline": {
+      "zero": "Ingen spillere online",
+      "one": "{} spiller online",
+      "other": "{} spillere online"
+    },
+    "lookingForMatch": "{} leder efter et spil"
   },
   "solo": {
     "title": "Spil alene",
