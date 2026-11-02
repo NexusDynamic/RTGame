@@ -1,33 +1,13 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:shelf/shelf.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// How many bytes a client may send on one socket: a burst of [capacity],
-/// refilled at [perSecond]. Exceeding it closes the socket.
-class ByteBudget {
-  ByteBudget({required this.capacity, required this.perSecond})
-    : _tokens = capacity.toDouble();
+import '../../metered_socket.dart';
 
-  final int capacity;
-  final int perSecond;
-
-  double _tokens;
-  final Stopwatch _clock = Stopwatch()..start();
-
-  /// Spend [bytes]; false once the budget is exhausted.
-  bool take(int bytes) {
-    final elapsed = _clock.elapsedMicroseconds / 1e6;
-    _clock.reset();
-    _tokens = (_tokens + elapsed * perSecond).clamp(0, capacity.toDouble());
-    _tokens -= bytes;
-    return _tokens >= 0;
-  }
-}
+export '../../metered_socket.dart' show ByteBudget;
 
 /// `shelf_web_socket`'s `webSocketHandler`, with an inbound [ByteBudget].
 ///
@@ -87,110 +67,11 @@ Handler meteredWebSocketHandler(
         ),
       );
       final webSocket = WebSocket.fromUpgradedSocket(
-        _MeteredSocket(socket, budget()),
+        MeteredSocket(socket, budget()),
         serverSide: true,
         maxPayloadLength: maxFrameBytes,
       )..pingInterval = pingInterval;
       onConnection(IOWebSocketChannel(webSocket));
     });
   };
-}
-
-/// A [Socket] whose inbound bytes are charged to a [ByteBudget]; the socket
-/// is destroyed when the budget runs out. Everything else is delegated.
-class _MeteredSocket extends Stream<Uint8List> implements Socket {
-  _MeteredSocket(this._socket, this._budget);
-
-  final Socket _socket;
-  final ByteBudget _budget;
-
-  @override
-  StreamSubscription<Uint8List> listen(
-    void Function(Uint8List event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    late final StreamSubscription<Uint8List> subscription;
-    subscription = _socket.listen(
-      (chunk) {
-        if (!_budget.take(chunk.length)) {
-          // Destroyed, not closed: a client over budget gets nothing more.
-          _socket.destroy();
-          return;
-        }
-        onData?.call(chunk);
-      },
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
-    );
-    return subscription;
-  }
-
-  // --- delegated ------------------------------------------------------------
-
-  @override
-  Encoding get encoding => _socket.encoding;
-
-  @override
-  set encoding(Encoding value) => _socket.encoding = value;
-
-  @override
-  void add(List<int> data) => _socket.add(data);
-
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) =>
-      _socket.addError(error, stackTrace);
-
-  @override
-  Future<void> addStream(Stream<List<int>> stream) => _socket.addStream(stream);
-
-  @override
-  Future<void> close() => _socket.close();
-
-  @override
-  Future<void> get done => _socket.done;
-
-  @override
-  Future<void> flush() => _socket.flush();
-
-  @override
-  void write(Object? object) => _socket.write(object);
-
-  @override
-  void writeAll(Iterable<Object?> objects, [String separator = '']) =>
-      _socket.writeAll(objects, separator);
-
-  @override
-  void writeCharCode(int charCode) => _socket.writeCharCode(charCode);
-
-  @override
-  void writeln([Object? object = '']) => _socket.writeln(object);
-
-  @override
-  InternetAddress get address => _socket.address;
-
-  @override
-  int get port => _socket.port;
-
-  @override
-  InternetAddress get remoteAddress => _socket.remoteAddress;
-
-  @override
-  int get remotePort => _socket.remotePort;
-
-  @override
-  void destroy() => _socket.destroy();
-
-  @override
-  bool setOption(SocketOption option, bool enabled) =>
-      _socket.setOption(option, enabled);
-
-  @override
-  Uint8List getRawOption(RawSocketOption option) =>
-      _socket.getRawOption(option);
-
-  @override
-  void setRawOption(RawSocketOption option) => _socket.setRawOption(option);
 }

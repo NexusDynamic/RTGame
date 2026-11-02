@@ -8,6 +8,8 @@ import 'package:rise_together_lobby/pow.dart' as pow;
 import 'package:rise_together_lobby/protocol.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'lobby_socket.dart';
+
 /// Why talking to the lobby failed, as something the UI can explain.
 enum LobbyFailure {
   /// Could not reach the lobby at all.
@@ -97,7 +99,7 @@ class LobbyClient {
 
   /// Open the matchmaking socket with a session [token].
   Future<LobbyConnection> connect(String token) async {
-    final channel = WebSocketChannel.connect(
+    final channel = connectLobbySocket(
       socketUri('/api/lobby', {'token': token}),
     );
     try {

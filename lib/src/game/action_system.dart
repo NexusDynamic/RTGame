@@ -20,7 +20,13 @@ class TeamActionStream {
 
   Stream<GameAction> get actionStream => _controller.stream;
   Stream<TeamThrust> get thrustStream =>
-      _controller.stream.map((_) => _calculateThrust());
+      _controller.stream.map((_) => getCurrentThrust());
+
+  /// The last computed thrust, and the bitflag map it was computed against.
+  /// Read several times a frame per team, and it changes only with an action
+  /// or the roster, so it is computed once per change rather than per read.
+  TeamThrust? _cachedThrust;
+  Map<String, int>? _cachedThrustBitflags;
 
   // Configured team player count (for proper thrust calculation)
   int? _configuredTeamPlayerCount;
@@ -35,10 +41,12 @@ class TeamActionStream {
   /// Set the configured team player count for proper thrust calculation
   void setConfiguredTeamPlayerCount(int count) {
     _configuredTeamPlayerCount = count;
+    _cachedThrust = null;
   }
 
   void addAction(GameAction action) {
     _currentActions[action.playerId] = action.action;
+    _cachedThrust = null;
     // A countdown's unlock, or a late network action, can land after the game
     // has been torn down and this stream closed.
     if (_controller.isClosed) return;
@@ -47,6 +55,7 @@ class TeamActionStream {
 
   void removePlayer(String playerId) {
     _currentActions.remove(playerId);
+    _cachedThrust = null;
     if (_controller.isClosed) return;
     _controller.add(GameAction(playerId, PaddleAction.none));
   }
@@ -54,6 +63,7 @@ class TeamActionStream {
   /// Clear all current actions for all players (used when ball hits wall)
   void clearAllActions() {
     final playerIds = _currentActions.keys.toList();
+    _cachedThrust = null;
 
     for (final playerId in playerIds) {
       // final previousAction = _currentActions[playerId];
@@ -63,7 +73,7 @@ class TeamActionStream {
     }
   }
 
-  TeamThrust _calculateThrust() {
+  TeamThrust _calculateThrust(Map<String, int>? playerBitflags) {
     final leftCount = _currentActions.values
         .where((a) => a == PaddleAction.left)
         .length;
@@ -80,9 +90,7 @@ class TeamActionStream {
     int leftBitflags = 0;
     int rightBitflags = 0;
 
-    if (_getPlayerBitflags != null) {
-      final playerBitflags = _getPlayerBitflags();
-
+    if (playerBitflags != null) {
       for (final entry in _currentActions.entries) {
         final playerId = entry.key;
         final action = entry.value;
@@ -107,7 +115,15 @@ class TeamActionStream {
     );
   }
 
-  TeamThrust getCurrentThrust() => _calculateThrust();
+  TeamThrust getCurrentThrust() {
+    final bitflags = _getPlayerBitflags?.call();
+    final cached = _cachedThrust;
+    if (cached != null && identical(bitflags, _cachedThrustBitflags)) {
+      return cached;
+    }
+    _cachedThrustBitflags = bitflags;
+    return _cachedThrust = _calculateThrust(bitflags);
+  }
 
   void dispose() {
     _controller.close();

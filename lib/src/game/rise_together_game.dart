@@ -205,7 +205,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   List<Map<String, dynamic>> get playerBitFlagsList =>
       List.unmodifiable(_playerBitflagsList);
   final List<Map<String, dynamic>> _playerBitflagsList = [];
-  final Map<String, int> _cachedPlayerBitflags = {};
+
+  /// Replaced, never mutated, when the roster changes: team streams cache
+  /// their thrust against this map's identity (see TeamActionStream).
+  Map<String, int> _cachedPlayerBitflags = {};
   int? _cachedPlayerCount;
 
   // Notifier for bitflag changes (for UI reactivity)
@@ -551,7 +554,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     _actionProvider = actionProvider;
 
     // Invalidate cached bitflags when changing providers
-    _cachedPlayerBitflags.clear();
+    _cachedPlayerBitflags = {};
     _cachedPlayerCount = null;
     _bitflagsNotifier.clear();
 
@@ -992,12 +995,12 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     final playerCount = _actionProvider!.playerAssignments.length;
     if (_cachedPlayerCount != playerCount) {
       initPlayerBitflags();
-      _cachedPlayerBitflags.clear();
-      for (final player in _playerBitflagsList) {
-        final bitflagValue = player['bitflagValue'] as int;
-        _cachedPlayerBitflags[player['playerId'] as String] = bitflagValue;
-        _cachedPlayerBitflags[player['nodeId'] as String] = bitflagValue;
-      }
+      _cachedPlayerBitflags = {
+        for (final player in _playerBitflagsList) ...{
+          player['playerId'] as String: player['bitflagValue'] as int,
+          player['nodeId'] as String: player['bitflagValue'] as int,
+        },
+      };
       _cachedPlayerCount = playerCount;
     }
 
