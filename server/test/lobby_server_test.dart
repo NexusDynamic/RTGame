@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:async/async.dart' show StreamQueue;
 import 'package:http/http.dart' as http;
@@ -23,6 +24,7 @@ void main() {
   Future<void> startServer({
     List<String> origins = const ['https://play.example'],
     int maxRooms = 10,
+    int maxRoomsPerIp = 4,
     List<String> turnUrls = const [],
   }) async {
     server = LobbyServer(
@@ -33,6 +35,7 @@ void main() {
         allowedOrigins: origins,
         powDifficulty: 6,
         maxRooms: maxRooms,
+        maxRoomsPerIp: maxRoomsPerIp,
         turnUrls: turnUrls,
         turnSecret: turnUrls.isEmpty ? null : 'turn-secret',
         stunUrls: const ['stun:stun.example:3478'],
@@ -45,9 +48,9 @@ void main() {
   tearDown(() => server.stop());
 
   Future<String> admit() async {
-    final challenge =
-        jsonDecode((await http.get(base.resolve('/api/challenge'))).body)
-            as Map<String, dynamic>;
+    final challenge = jsonDecode(
+      (await http.get(base.resolve('/api/challenge'))).body,
+    ) as Map<String, dynamic>;
     final counter = await solve(
       challenge['challenge'] as String,
       challenge['difficulty'] as int,
@@ -65,8 +68,10 @@ void main() {
   }
 
   /// A lobby client that records every message it receives.
-  Future<(WebSocketChannel, StreamQueue<ServerMessage>)> lobby() async {
-    final token = await admit();
+  Future<(WebSocketChannel, StreamQueue<ServerMessage>)> lobby({
+    String? token,
+  }) async {
+    token ??= await admit();
     final socket = WebSocketChannel.connect(
       Uri.parse('ws://127.0.0.1:${server.port}/api/lobby?token=$token'),
     );
@@ -97,9 +102,9 @@ void main() {
     });
 
     test('a challenge can be redeemed once', () async {
-      final c =
-          jsonDecode((await http.get(base.resolve('/api/challenge'))).body)
-              as Map<String, dynamic>;
+      final c = jsonDecode(
+        (await http.get(base.resolve('/api/challenge'))).body,
+      ) as Map<String, dynamic>;
       final counter = await solve(c['challenge'] as String, 6);
       final body = jsonEncode({
         'challenge': c['challenge'],
@@ -116,9 +121,9 @@ void main() {
     });
 
     test('a wrong solution or forged challenge is refused', () async {
-      final c =
-          jsonDecode((await http.get(base.resolve('/api/challenge'))).body)
-              as Map<String, dynamic>;
+      final c = jsonDecode(
+        (await http.get(base.resolve('/api/challenge'))).body,
+      ) as Map<String, dynamic>;
       var wrong = 0;
       while (checkSolution(c['challenge'] as String, wrong, 6)) {
         wrong++;
@@ -192,7 +197,16 @@ void main() {
       expect(server.roomCount, 1);
       // Short-lived TURN credentials, and STUN.
       final turn = ma.iceServers.singleWhere((s) => s.username != null);
-      expect(turn.username, endsWith(':${ma.room}'));
+      expect(turn.username, contains(':${ma.room}.'));
+      // Per player: coturn's quota counts allocations per username.
+      final other = mb.iceServers.singleWhere((s) => s.username != null);
+      expect(other.username, isNot(turn.username));
+      // Valid for as long as the room can live.
+      final expires = int.parse(turn.username!.split(':').first);
+      final lifetime = Duration(
+        seconds: expires - DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      );
+      expect(lifetime, greaterThan(const Duration(minutes: 110)));
       expect(
         ma.iceServers.any((s) => s.urls.first.startsWith('stun:')),
         isTrue,
@@ -395,5 +409,118 @@ void main() {
     );
     addTearDown(() => intruder.dispose().catchError((_) {}));
     await expectLater(intruder.initialize(), throwsA(anything));
+  });
+
+  group('limits', () {
+    test('a session token opens one lobby socket', () async {
+      await startServer();
+      final token = await admit();
+      await lobby(token: token);
+      final second = WebSocketChannel.connect(
+        Uri.parse('ws://127.0.0.1:${server.port}/api/lobby?token=$token'),
+      );
+      await expectLater(second.ready, throwsA(anything));
+    });
+
+    test('an oversized message closes the lobby socket', () async {
+      await startServer();
+      final (socket, queue) = await lobby();
+      socket.sink.add('x' * (64 * 1024));
+      expect(await queue.hasNext.timeout(const Duration(seconds: 5)), isFalse);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(server.lobbyConnectionCount, 0);
+    });
+
+    test('one message split into endless fragments is cut off', () async {
+      // dart:io bounds each frame but buffers a fragmented message until its
+      // final frame, so small non-final frames were an unbounded buffer. A raw
+      // client, because a WebSocket library will not send that.
+      await startServer();
+      final token = await admit();
+      final raw = await Socket.connect('127.0.0.1', server.port);
+      final closed = Completer<void>();
+      final handshake = Completer<void>();
+      final received = <int>[];
+      raw.listen(
+        (bytes) {
+          received.addAll(bytes);
+          if (!handshake.isCompleted &&
+              utf8
+                  .decode(received, allowMalformed: true)
+                  .contains('\r\n\r\n')) {
+            handshake.complete();
+          }
+        },
+        onDone: () {
+          if (!closed.isCompleted) closed.complete();
+        },
+        onError: (_) {
+          if (!closed.isCompleted) closed.complete();
+        },
+      );
+      raw.write(
+        'GET /api/lobby?token=$token HTTP/1.1\r\n'
+        'Host: 127.0.0.1\r\n'
+        'Upgrade: websocket\r\n'
+        'Connection: Upgrade\r\n'
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n'
+        'Sec-WebSocket-Version: 13\r\n\r\n',
+      );
+      await handshake.future.timeout(const Duration(seconds: 5));
+      expect(utf8.decode(received), startsWith('HTTP/1.1 101'));
+
+      // A masked frame without FIN: [opcode] then 1000 bytes of payload.
+      List<int> frame(int opcode) => [
+        opcode, // FIN clear
+        0x80 | 126, 1000 >> 8, 1000 & 0xff, // masked, 16-bit length
+        0, 0, 0, 0, // zero mask
+        ...List.filled(1000, 0x61),
+      ];
+      try {
+        raw.add(frame(0x1)); // text, not final
+        for (var i = 0; i < 200 && !closed.isCompleted; i++) {
+          raw.add(frame(0x0)); // continuation, not final
+          await raw.flush();
+        }
+      } catch (_) {
+        // The server hung up mid-send: what this test wants.
+      }
+      await closed.future.timeout(const Duration(seconds: 5));
+      raw.destroy();
+    });
+
+    test('one address cannot hold more than its share of rooms', () async {
+      await startServer(maxRoomsPerIp: 1);
+      // Waiting first, then the match (or the refusal).
+      Future<ServerMessage> settled() async {
+        final (a, qa) = await lobby();
+        final (b, _) = await lobby();
+        send(a, const QuickMatch(mode: LobbyMode.coop, players: 2));
+        send(b, const QuickMatch(mode: LobbyMode.coop, players: 2));
+        while (true) {
+          final m = await qa.next.timeout(const Duration(seconds: 5));
+          if (m is! Waiting) return m;
+        }
+      }
+
+      expect(await settled(), isA<MatchFound>());
+      final second = await settled();
+      expect(second, isA<LobbyError>());
+      expect((second as LobbyError).code, LobbyErrorCode.busy);
+      expect(server.roomCount, 1);
+    });
+  });
+
+  test('IPv6 clients are limited per /64', () {
+    expect(
+      LobbyServer.addressKey('2001:db8:1:2:aaaa::1'),
+      LobbyServer.addressKey('2001:db8:1:2:bbbb:cccc:dddd:eeee'),
+    );
+    expect(
+      LobbyServer.addressKey('2001:db8:1:2::1'),
+      isNot(LobbyServer.addressKey('2001:db8:1:3::1')),
+    );
+    expect(LobbyServer.addressKey('::ffff:192.0.2.7'), '192.0.2.7');
+    expect(LobbyServer.addressKey('192.0.2.7'), '192.0.2.7');
   });
 }

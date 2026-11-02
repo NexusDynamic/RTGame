@@ -311,6 +311,16 @@ void main() {
     );
   }, timeout: const Timeout(Duration(seconds: 30)));
 
+  test('a far-future ready cannot wipe other players\' readiness', () async {
+    // Regression: the host pruned its ready sets by the *sender's* round, so
+    // one follower claiming round 999 erased everyone else's readiness.
+    final (host, followers) = await startMatch(3);
+    await followers[0].markReady();
+    await followers[1].markReady(round: 999);
+    await followers[1].markReady();
+    expect(await host.waitForPlayersReady(const Duration(seconds: 5)), isTrue);
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
   test('a rematch reaches followers', () async {
     final (host, followers) = await startMatch(2);
     final rematch = followers.single.events.firstWhere((e) => e is Rematch);

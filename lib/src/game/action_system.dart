@@ -39,11 +39,15 @@ class TeamActionStream {
 
   void addAction(GameAction action) {
     _currentActions[action.playerId] = action.action;
+    // A countdown's unlock, or a late network action, can land after the game
+    // has been torn down and this stream closed.
+    if (_controller.isClosed) return;
     _controller.add(action);
   }
 
   void removePlayer(String playerId) {
     _currentActions.remove(playerId);
+    if (_controller.isClosed) return;
     _controller.add(GameAction(playerId, PaddleAction.none));
   }
 
@@ -54,6 +58,7 @@ class TeamActionStream {
     for (final playerId in playerIds) {
       // final previousAction = _currentActions[playerId];
       _currentActions[playerId] = PaddleAction.none;
+      if (_controller.isClosed) continue;
       _controller.add(GameAction(playerId, PaddleAction.none));
     }
   }

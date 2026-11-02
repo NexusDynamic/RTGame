@@ -8,6 +8,10 @@ on:
   # The release workflow runs this as its test gate.
   workflow_call:
 
+# Read-only token: CI only checks out and tests.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true

@@ -96,15 +96,19 @@ const double kParallaxPerWorldVelocity = 0.128;
 /// follower path (`_interpolatePhysicsState`) so every game mode scrolls at the
 /// same speed for the same input. They were two copies of the same expression,
 /// which is exactly how they would drift.
+///
+/// Written into [out] when given, so per-frame callers allocate nothing.
 Vector2 parallaxVelocityForThrust(
   double totalThrust,
-  double thrustMultiplierSetting,
-) => Vector2(
-  0,
-  -GameGeometry.velocity(thrustMultiplierSetting) *
-      totalThrust *
-      kParallaxPerWorldVelocity,
-);
+  double thrustMultiplierSetting, [
+  Vector2? out,
+]) => (out ?? Vector2.zero())
+  ..setValues(
+    0,
+    -GameGeometry.velocity(thrustMultiplierSetting) *
+        totalThrust *
+        kParallaxPerWorldVelocity,
+  );
 
 class RiseTogetherWorld extends forge2d.Forge2DWorld
     with
@@ -643,12 +647,14 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
         ball.isMounted) {
       final thrust = controller.actionStream.getCurrentThrust();
       final totalThrust = thrust.leftThrust + thrust.rightThrust;
-      parallax?.parallax?.baseVelocity.setFrom(
+      final baseVelocity = parallax?.parallax?.baseVelocity;
+      if (baseVelocity != null) {
         parallaxVelocityForThrust(
           totalThrust,
           appSettings.getDouble('physics.thrust_multiplier'),
-        ),
-      );
+          baseVelocity,
+        );
+      }
     }
     super.update(dt);
   }
@@ -710,6 +716,9 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
       appLog.fine('Adding wall: $wall');
     }
     addAll(walls);
+    // Replaced, not stacked: this runs on every level load, and the level
+    // teardown removes only walls and level objects.
+    _teamTextComponent?.removeFromParent();
     _teamTextComponent = TextComponent(
       text: _getTeamDisplayText(),
       anchor: Anchor.center,

@@ -14,7 +14,6 @@ dependencies:
   peer_coordinator: ^0.4.3
   shelf: ^1.4.2
   shelf_router: ^1.1.4
-  shelf_web_socket: ^3.0.0
   web_socket_channel: ^3.0.3
 
 # Keep dev_dependencies the LAST section: deploy/Dockerfile strips it.

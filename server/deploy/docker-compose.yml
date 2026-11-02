@@ -60,6 +60,9 @@ services:
       - --static-auth-secret=${TURN_SECRET}
       - --realm=${DOMAIN}
       - --external-ip=${PUBLIC_IP:?set PUBLIC_IP in .env}
+      # Never relay to this host itself: other services listening on its
+      # public address are not for players to reach through TURN.
+      - --denied-peer-ip=${PUBLIC_IP}
       # Configurable so it can run next to another coturn: give it a different
       # listening port and a relay range that does not overlap.
       - --listening-port=${TURN_PORT:-3478}

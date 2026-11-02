@@ -99,7 +99,9 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       distanceTracker: DistanceTracker(),
     );
     game.onRoundOver = (result) {
-      if (!mounted || _game != game) return;
+      // One result per round: a repeated RoundOver (a modified host can send
+      // as many as it likes) must not count the win again.
+      if (!mounted || _game != game || _result != null) return;
       setState(() {
         _result = result;
         if (_session.rules.mode == MatchMode.versus && result.winner >= 0) {
@@ -121,13 +123,20 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       if (!mounted || _game != game) return;
     }
     final rules = _session.rules;
-    await game.startGameDirect(
-      mode: rules.mode == MatchMode.coop ? GameMode.individual : GameMode.joint,
-      durationSeconds: rules.roundDurationSeconds,
-      round: round,
-      seed: seed,
-      skipCountdown: false,
-    );
+    try {
+      await game.startGameDirect(
+        mode: rules.mode == MatchMode.coop
+            ? GameMode.individual
+            : GameMode.joint,
+        durationSeconds: rules.roundDurationSeconds,
+        round: round,
+        seed: seed,
+        skipCountdown: false,
+      );
+    } on TimeoutException {
+      // A follower that never saw the host start the round.
+      if (mounted && _game == game) _onEnded(SessionEnd.connectionLost);
+    }
   }
 
   /// Host only: start the next round for everyone.

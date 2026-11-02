@@ -13,6 +13,9 @@ abstract class LobbyPeer {
   /// Pseudonymous client id, for logs only.
   String get client;
 
+  /// The client's address as limits count it (an IPv6 /64). Never logged.
+  String get addressKey;
+
   void send(ServerMessage message);
 
   /// Close the lobby connection. Called after a match is sent.
@@ -32,8 +35,14 @@ class Matchmaker {
     this.privateRoomTtl = const Duration(minutes: 15),
   });
 
-  /// Opens a room, or returns null when the server is at capacity.
-  final Future<Room?> Function(LobbyMode mode, int players) openRoom;
+  /// Opens a room for [members], or returns null when the server (or one of
+  /// the members' addresses) is at capacity.
+  final Future<Room?> Function(
+    LobbyMode mode,
+    int players,
+    List<LobbyPeer> members,
+  )
+  openRoom;
 
   /// Builds a player's match message for [room].
   final MatchFound Function(
@@ -51,13 +60,18 @@ class Matchmaker {
   /// Where each peer is waiting. A peer waits in at most one place.
   final Map<LobbyPeer, Object> _waiting = {};
 
+  /// Peers whose room is being opened. Out of [_waiting] by then, so without
+  /// this a fast second request queued them again and could open a second
+  /// room for the same player.
+  final Set<LobbyPeer> _matching = {};
+
   final Random _random = Random.secure();
 
   int get waitingCount => _waiting.length;
   int get privateRoomCount => _private.length;
 
   Future<void> handle(LobbyPeer peer, ClientMessage message) async {
-    if (_waiting.containsKey(peer)) {
+    if (_waiting.containsKey(peer) || _matching.contains(peer)) {
       peer.send(const LobbyError(LobbyErrorCode.badRequest));
       return;
     }
@@ -173,7 +187,13 @@ class Matchmaker {
     int players, {
     required bool custom,
   }) async {
-    final room = await openRoom(mode, players);
+    _matching.addAll(group);
+    final Room? room;
+    try {
+      room = await openRoom(mode, players, group);
+    } finally {
+      _matching.removeAll(group);
+    }
     for (var i = 0; i < group.length; i++) {
       group[i].send(
         room == null
@@ -202,6 +222,7 @@ class Matchmaker {
     _private.clear();
     _queues.clear();
     _waiting.clear();
+    _matching.clear();
   }
 }
 

@@ -159,4 +159,23 @@ void main() {
 
     expect(worlds.every((w) => !w.isValid), isTrue);
   });
+
+  testWidgets('obstacle width effects are bounded', (tester) async {
+    // A custom level can hold dozens of powerups; unbounded, the paddle grew
+    // without limit and followers rejected every sample as malformed.
+    final game = await loadGame(tester);
+    final paddle = playerController(game).world.paddle;
+    final base = paddle.widthMultiplier;
+
+    for (var i = 0; i < 40; i++) {
+      paddle.applyWidthMultiplier(2.0, resetPosition: false);
+    }
+    expect(paddle.widthMultiplier, closeTo(base * 3.0, 1e-9));
+
+    for (var i = 0; i < 40; i++) {
+      paddle.applyWidthMultiplier(0.5, resetPosition: false);
+    }
+    expect(paddle.widthMultiplier, closeTo(base * 0.3, 1e-9));
+    await tester.pumpWidget(const SizedBox());
+  });
 }

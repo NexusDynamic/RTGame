@@ -35,7 +35,7 @@ abstract mixin class PositionableBodyComponent {
 
   void stopMovement() {
     // noop if kinematic is false
-    body.linearVelocity = Vector2.zero();
+    body.linearVelocity = _zeroVelocity;
     body.angularVelocity = 0.0;
   }
 
@@ -91,3 +91,6 @@ abstract mixin class PositionableBodyComponent {
     _pendingPositionUpdate = false;
   }
 }
+
+/// Shared: the velocity setter copies the values.
+final Vector2 _zeroVelocity = Vector2.zero();

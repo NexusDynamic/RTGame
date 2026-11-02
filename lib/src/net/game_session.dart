@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:rise_together_game/src/game/physics_channels.dart';
 import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
@@ -147,15 +148,41 @@ bool _isLevelIndex(Object? value) =>
 /// bitflags in this game stay well inside it; anything larger is malformed.
 const double maxPhysicsMagnitude = 1e6;
 
+/// Largest press-indicator bitflag value: one bit per player, at most
+/// [PhysicsChannels.maxPlayers] players.
+const int maxBitflags = (1 << PhysicsChannels.maxPlayers) - 1;
+
+/// Paddle width multipliers a sample may carry. The real range is far
+/// narrower (see `Paddle`); this only keeps Box2D away from a zero, negative
+/// or absurd shape.
+const double minPaddleWidthMultiplier = 0.05;
+const double maxPaddleWidthMultiplier = 20.0;
+
 /// Whether [state] is a physics sample this device may apply: the expected
-/// length, and every value finite and within [maxPhysicsMagnitude].
+/// length, every value finite and within [maxPhysicsMagnitude], press
+/// bitflags whole numbers in `0..maxBitflags`, and paddle widths within
+/// [minPaddleWidthMultiplier]..[maxPaddleWidthMultiplier].
 ///
 /// NaN or infinity reaching Box2D would poison the body transform for the rest
-/// of the match.
+/// of the match. A negative bitflag hung every follower (an arithmetic shift
+/// of a negative number never reaches zero), and a zero or negative width is
+/// a degenerate Box2D shape.
 bool validPhysicsSample(List<double> state, {required int expectedLength}) {
   if (state.length != expectedLength) return false;
-  for (final value in state) {
+  for (var i = 0; i < state.length; i++) {
+    final value = state[i];
     if (!value.isFinite || value.abs() > maxPhysicsMagnitude) return false;
+    switch (i % PhysicsChannels.perTeam) {
+      case PhysicsChannels.leftBitflags || PhysicsChannels.rightBitflags:
+        if (value < 0 || value > maxBitflags || value != value.truncate()) {
+          return false;
+        }
+      case PhysicsChannels.paddleWidthMultiplier:
+        if (value < minPaddleWidthMultiplier ||
+            value > maxPaddleWidthMultiplier) {
+          return false;
+        }
+    }
   }
   return true;
 }

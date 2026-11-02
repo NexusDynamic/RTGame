@@ -144,7 +144,14 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
         host: match.host,
         timings: timings,
       );
-      if (_cancelled) return;
+      // Cancelled while connecting: cancel() found nothing pending to release,
+      // so this session is ours to close, or it lives on in the background
+      // with the other players waiting on it.
+      if (_cancelled) {
+        _pending = null;
+        await session.leave();
+        return;
+      }
       await session.startMatch(
         hostRules: MatchRules(
           mode: match.mode == LobbyMode.coop
@@ -159,8 +166,11 @@ class MatchmakingController extends ChangeNotifier with AppLogging {
         hostLevels: match.custom ? customLevels : null,
         customLevels: match.custom,
       );
-      if (_cancelled) return;
       _pending = null;
+      if (_cancelled) {
+        await session.leave();
+        return;
+      }
       _handedOver = true;
       _set(MatchReady(session));
     } on LobbyException catch (e) {

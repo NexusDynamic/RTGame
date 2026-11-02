@@ -193,10 +193,13 @@ class WorldController with AppLogging, Resetable {
     appLog.fine('Input unlocked for team ${_teamContext.teamId}');
   }
 
+  /// Shared: the velocity setter copies, and this runs every frame.
+  static final Vector2 _zero = Vector2.zero();
+
   void stopMovement() {
-    world.ball.body.linearVelocity = Vector2.zero();
+    world.ball.body.linearVelocity = _zero;
     world.ball.body.angularVelocity = 0.0;
-    world.paddle.body.linearVelocity = Vector2.zero();
+    world.paddle.body.linearVelocity = _zero;
     world.paddle.body.angularVelocity = 0.0;
   }
 

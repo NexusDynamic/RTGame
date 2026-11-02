@@ -75,7 +75,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
 
     priority = 1;
 
-    appLog.info(
+    appLog.fine(
       'Paddle initialized: width=${(_end.x - _start.x).abs()}, base multiplier=$_baseWidthMultiplier, original width=$_originalWidth',
     );
 
@@ -159,7 +159,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
     Vector2 newEnd, {
     bool resetPosition = true,
   }) {
-    appLog.info("current paddle angle: ${body.angle}");
+    appLog.fine("current paddle angle: ${body.angle}");
     stopMovement();
     // Only a repositioning reshape may discard staged transforms. On a
     // follower the frame's network pose is staged just before a width sync,
@@ -183,12 +183,12 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
       // forge2d box2d v2
       // body.setTransform(startPosition, 0);
       positionNotifier.value = startPosition.y;
-      appLog.info('Reset paddle position to: $startPosition');
+      appLog.fine('Reset paddle position to: $startPosition');
     }
-    appLog.info(
+    appLog.fine(
       'Updated paddle shape to w: $_w, h: $_h at position: ${body.position}',
     );
-    appLog.info("new paddle angle: ${body.angle}");
+    appLog.fine("new paddle angle: ${body.angle}");
   }
 
   @override
@@ -269,11 +269,20 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
     positionNotifier.value = body.position.y;
   }
 
+  /// Bounds on the cumulative obstacle multiplier. A custom level can hold
+  /// dozens of powerups; unbounded, forty of them made the paddle 1e12 times
+  /// wider (or narrower), and followers then rejected every sample.
+  static const double minTempWidthMultiplier = 0.3;
+  static const double maxTempWidthMultiplier = 3.0;
+
   /// Apply temporary width multiplier to paddle (for obstacle effects)
-  /// This is cumulative and resets when level restarts
+  /// This is cumulative, bounded, and resets when level restarts
   void applyWidthMultiplier(double multiplier, {bool resetPosition = true}) {
-    _tempWidthMultiplier *= multiplier;
-    appLog.info(
+    _tempWidthMultiplier = (_tempWidthMultiplier * multiplier).clamp(
+      minTempWidthMultiplier,
+      maxTempWidthMultiplier,
+    );
+    appLog.fine(
       'Applying temp width multiplier: $multiplier (temp: $_tempWidthMultiplier, base: $_baseWidthMultiplier, total: $widthMultiplier)',
     );
 
@@ -284,7 +293,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
   /// This persists across level restarts
   void setBaseWidthMultiplier(double multiplier) {
     _baseWidthMultiplier = multiplier;
-    appLog.info(
+    appLog.fine(
       'Setting base width multiplier: $_baseWidthMultiplier (temp: $_tempWidthMultiplier, total: $widthMultiplier)',
     );
 
@@ -298,7 +307,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
       return; // Already in sync
     }
 
-    appLog.info(
+    appLog.fine(
       'Syncing paddle width: received total=$totalMultiplier, current total=$widthMultiplier (base=$_baseWidthMultiplier, temp=$_tempWidthMultiplier)',
     );
 
@@ -307,7 +316,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
     if ((_tempWidthMultiplier - newTemp).abs() > 0.001) {
       final oldTemp = _tempWidthMultiplier;
       _tempWidthMultiplier = newTemp;
-      appLog.info(
+      appLog.fine(
         'Updated temp multiplier: $oldTemp -> $_tempWidthMultiplier (new total: $widthMultiplier)',
       );
       // resetPosition: false -- the pose is the coordinator's, and it arrives
@@ -328,7 +337,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
     final newStart = Vector2(center - newWidth / 2, _start.y);
     final newEnd = Vector2(center + newWidth / 2, _end.y);
 
-    appLog.info(
+    appLog.fine(
       'Updating paddle width: original=$_originalWidth, multiplier=$widthMultiplier, current=$currentWidth -> new=$newWidth',
     );
 
@@ -338,7 +347,7 @@ class Paddle extends BodyComponent<RiseTogetherGameBase>
   /// Reset only the temporary width effect without moving the paddle.
   void resetTempWidth() {
     if (_tempWidthMultiplier != 1.0) {
-      appLog.info(
+      appLog.fine(
         'Resetting temp width multiplier from $_tempWidthMultiplier to 1.0 (level advance)',
       );
       _tempWidthMultiplier = 1.0;

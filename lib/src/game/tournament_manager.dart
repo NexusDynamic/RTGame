@@ -255,8 +255,8 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
 
   /// Update round elapsed time
   void updateRoundTime(double elapsedSeconds) {
+    // No notify: called every frame, and nothing listens for elapsed time.
     _currentRoundElapsedTime = elapsedSeconds;
-    notifyListeners();
   }
 
   /// Update the current distance for a team

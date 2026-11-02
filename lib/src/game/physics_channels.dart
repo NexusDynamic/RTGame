@@ -42,6 +42,10 @@ abstract final class PhysicsChannels {
   static const leftBitflags = 6;
   static const rightBitflags = 7;
 
+  /// Players the press indicators can hold: one bit each, in a float32
+  /// channel that represents integers exactly well beyond this.
+  static const maxPlayers = 8;
+
   /// Where [teamId]'s slice starts within a match block.
   static int offsetForTeam(int teamId) => teamId * perTeam;
 

@@ -514,9 +514,13 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         return KeyEventResult.handled;
       } else if (isKeyUp) {
         _tempLeftDown = false;
-        if (!_tempRightDown) {
-          sendAction(0, 'keyboard_player', PaddleAction.none);
-        }
+        // Back to whatever is still held: staying silent left the paddle on
+        // `left` while only Right was down.
+        sendAction(
+          0,
+          'keyboard_player',
+          _tempRightDown ? PaddleAction.right : PaddleAction.none,
+        );
         return KeyEventResult.handled;
       }
     } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
@@ -526,9 +530,11 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         return KeyEventResult.handled;
       } else if (isKeyUp) {
         _tempRightDown = false;
-        if (!_tempLeftDown) {
-          sendAction(0, 'keyboard_player', PaddleAction.none);
-        }
+        sendAction(
+          0,
+          'keyboard_player',
+          _tempLeftDown ? PaddleAction.left : PaddleAction.none,
+        );
         return KeyEventResult.handled;
       }
     }
@@ -779,8 +785,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       try {
         await start.future.timeout(const Duration(seconds: 60));
       } on TimeoutException {
+        // Rethrown so the screen can say so and leave: returning quietly left
+        // the player on a paused game with no error and no way out.
         appLog.warning('Never saw the host start the round');
-        return;
+        rethrow;
       } finally {
         _awaitingStart = null;
       }
@@ -1862,21 +1870,25 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       final totalThrust =
           (_countSetBits(leftBitflags) + _countSetBits(rightBitflags)) /
           teamPlayerCount;
-      world.parallax?.parallax?.baseVelocity.setFrom(
+      final baseVelocity = world.parallax?.parallax?.baseVelocity;
+      if (baseVelocity != null) {
         parallaxVelocityForThrust(
           totalThrust,
           appSettings.getDouble('physics.thrust_multiplier'),
-        ),
-      );
+          baseVelocity,
+        );
+      }
     }
   }
 
   /// Count the set bits in [value] (players pressing, from bitflags).
-  int _countSetBits(int value) {
-    int count = 0;
-    while (value != 0) {
-      count += value & 1;
-      value >>= 1;
+  ///
+  /// Bounded to the bits a player can own: shifting a negative number right
+  /// never reaches zero, so an unbounded loop hung on a hostile sample.
+  static int _countSetBits(int value) {
+    var count = 0;
+    for (var bit = 0; bit < PhysicsChannels.maxPlayers; bit++) {
+      count += (value >> bit) & 1;
     }
     return count;
   }
@@ -1906,6 +1918,9 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       _actionProvider!.dispose();
       _actionProvider = null;
     }
+    // Each game is given its own manager; its team streams' controllers
+    // would otherwise stay open after the round.
+    actionManager.dispose();
 
     super.onRemove();
 

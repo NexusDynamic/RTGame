@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:peer_coordinator/peer_coordinator.dart';
+import 'package:rise_together_game/src/game/physics_channels.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/levels/custom_level.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
@@ -80,7 +81,7 @@ class PeerGameSession with AppLogging implements GameSession {
   static const String physicsStreamName = 'rt_physics';
 
   /// Players a match can hold. Bounded by the float32 press-indicator bits.
-  static const int maxPlayers = 8;
+  static const int maxPlayers = PhysicsChannels.maxPlayers;
 
   /// Longest nickname kept from another peer.
   static const int maxNicknameLength = 16;
@@ -534,11 +535,11 @@ class PeerGameSession with AppLogging implements GameSession {
     final player = _playerFor(event.fromNodeUId);
     if (player == null || player.isCoordinator) return;
     final round = event.payload['round'];
-    if (round is! int || round < 0 || round > maxRound) return;
-    // Only the current round and the next are worth remembering; this bounds
-    // what a peer spamming round numbers can make the host store.
-    _readyPlayers.removeWhere((r, _) => r < round - 1);
-    if (_readyPlayers.length > 4) return;
+    // Only the round the host is on and the next are accepted. The window is
+    // the host's, never the sender's: pruning by the sender's number let one
+    // follower claim round 999 and wipe everyone's readiness, so the host sat
+    // out its whole ready timeout every round.
+    if (round is! int || round < _hostRound || round > _hostRound + 1) return;
     if ((_readyPlayers[round] ??= {}).add(player.nodeId)) {
       _readyChanged.add(null);
     }
@@ -641,9 +642,16 @@ class PeerGameSession with AppLogging implements GameSession {
     await _session.sendUserMessage(readyMessageType, 'ready', {'round': round});
   }
 
+  /// The round the host is waiting on (or last waited on), host only.
+  int _hostRound = 0;
+
   @override
   Future<bool> waitForPlayersReady(Duration timeout, {int round = 0}) async {
     if (!_isHost) return true;
+    if (round > _hostRound) {
+      _hostRound = round;
+      _readyPlayers.removeWhere((r, _) => r < round);
+    }
     final followers = _assignments.where((a) => !a.isCoordinator).length;
     bool allReady() => (_readyPlayers[round]?.length ?? 0) >= followers;
     if (allReady()) return true;
