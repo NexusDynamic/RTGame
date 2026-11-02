@@ -345,9 +345,8 @@ class CustomLevel {
     final runes = cleaned.runes.toList();
     return runes.length <= CustomLevelLimits.maxNameLength
         ? cleaned
-        : String.fromCharCodes(
-            runes.take(CustomLevelLimits.maxNameLength),
-          ).trim();
+        : String.fromCharCodes(runes.take(CustomLevelLimits.maxNameLength))
+              .trim();
   }
 
   List<Object> _toWire() => [
@@ -410,9 +409,8 @@ class CustomLevel {
   bool sameLayout(CustomLevel other) =>
       other.heightMultiplier == heightMultiplier &&
       other.objects.length == objects.length &&
-      Iterable.generate(
-        objects.length,
-      ).every((i) => other.objects[i] == objects[i]);
+      Iterable.generate(objects.length)
+          .every((i) => other.objects[i] == objects[i]);
 }
 
 /// The levels of one online match, in order.

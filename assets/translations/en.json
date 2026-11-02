@@ -271,5 +271,11 @@
     "packOrder": "Levels, in order ({} / {})",
     "addLevel": "Add a level",
     "pickTitle": "Choose levels to play"
+  },
+  "opponent": {
+    "metresAhead": "{} m ahead",
+    "metresBehind": "{} m behind",
+    "level": "{} level",
+    "levels": "{} levels"
   }
 }

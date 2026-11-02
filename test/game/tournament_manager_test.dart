@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/game/tournament_manager.dart';
+
 import '../helpers/test_helpers.dart';
 
 void main() {

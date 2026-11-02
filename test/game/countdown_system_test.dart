@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/game/countdown_system.dart';
+
 import '../helpers/test_helpers.dart';
 
 void main() {
@@ -165,6 +167,41 @@ void main() {
         await system.setStateFromNetwork(CountdownState.finished);
         await system.setStateFromNetwork(CountdownState.finished);
         expect(unlocks, equals(1), reason: 'a repeated state is not an edge');
+      });
+    });
+
+    test('lengthOf covers the message and the four steps', () {
+      expect(CountdownSystem.lengthOf(), const Duration(seconds: 4));
+      expect(CountdownSystem.lengthOf(message: ''), const Duration(seconds: 4));
+      expect(
+        CountdownSystem.lengthOf(message: 'Level 2'),
+        const Duration(seconds: 6),
+      );
+      expect(
+        CountdownSystem.lengthOf(message: 'Level 2', messageDuration: 0.5),
+        const Duration(milliseconds: 4500),
+      );
+    });
+
+    test('a superseded run does not start a second timer', () {
+      // Regression: a run superseded while awaiting its first beep carried on
+      // and started a Timer.periodic of its own after the new run had started
+      // one, so the countdown ran at double speed and one timer outlived
+      // dispose().
+      fakeAsync((async) {
+        final system = CountdownSystem(
+          onPlayLo: () => Future.delayed(const Duration(milliseconds: 100)),
+        );
+        unawaited(system.startCountdown());
+        async.elapse(const Duration(milliseconds: 50));
+        system.cancel();
+        unawaited(system.startCountdown());
+        async.elapse(const Duration(milliseconds: 200));
+
+        // Torn down mid-countdown: nothing may keep ticking.
+        system.dispose();
+        expect(async.periodicTimerCount, 0);
+        async.elapse(const Duration(seconds: 10));
       });
     });
   });

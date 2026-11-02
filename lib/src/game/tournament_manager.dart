@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:rise_together_game/src/attributes/resetable.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';

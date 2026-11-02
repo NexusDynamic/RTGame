@@ -1,13 +1,11 @@
 /// Decides when the authoritative physics state goes out on the wire.
 ///
-/// Pulled out of [NetworkCoordinator] because this is the highest-frequency
-/// path in the system — it is consulted on every physics frame, up to 120 Hz,
-/// on a Raspberry Pi — and because its gating is what silently broke 1v1: a
-/// flag that nothing enabled meant zero samples were ever sent, while the
-/// input path kept working and logging, so the failure looked like a rendering
-/// bug rather than a broadcast one.
+/// Kept on its own because this is the highest-frequency path in the system,
+/// consulted on every physics frame, and because a gating mistake here fails
+/// silently: zero samples sent while the input path keeps working looks like a
+/// rendering bug rather than a broadcast one.
 ///
-/// Owns only the decision. The stream's lifecycle stays with the coordinator,
+/// Owns only the decision. The stream's lifecycle stays with the session,
 /// which hands in [sendSample].
 class PhysicsStateBroadcaster {
   PhysicsStateBroadcaster({
@@ -55,7 +53,7 @@ class PhysicsStateBroadcaster {
   bool _sentAny = false;
 
   /// Samples actually sent. Exposed for diagnostics and tests — "did anything
-  /// go out at all" is precisely the question the 1v1 blackout raised.
+  /// go out at all" is the first question when followers see nothing move.
   int sentCount = 0;
 
   bool get isEnabled => _enabled;

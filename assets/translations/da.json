@@ -271,5 +271,11 @@
     "packOrder": "Baner i rækkefølge ({} / {})",
     "addLevel": "Tilføj en bane",
     "pickTitle": "Vælg baner at spille"
+  },
+  "opponent": {
+    "metresAhead": "{} m foran",
+    "metresBehind": "{} m bagud",
+    "level": "{} niveau",
+    "levels": "{} niveauer"
   }
 }

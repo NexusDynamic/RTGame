@@ -29,10 +29,6 @@ abstract final class PhysicsChannels {
   /// A single match: 2 teams × 8. Joint and individual modes send exactly this.
   static const perMatch = perTeam * teamsPerMatch; // 16
 
-  /// Parallel 1v1 sends two matches side by side.
-  static const matchesInOneVOne = 2;
-  static const oneVOneTotal = perMatch * matchesInOneVOne; // 32
-
   // --- channel indices, relative to a team's slice --------------------------
 
   static const ballX = 0;
@@ -50,27 +46,6 @@ abstract final class PhysicsChannels {
   static int offsetForTeam(int teamId) => teamId * perTeam;
 
   // --- decisions ------------------------------------------------------------
-
-  /// Whether [length] is a shape this game knows how to read.
-  static bool isValidLength(int length) =>
-      length == perMatch || length == oneVOneTotal;
-
-  /// The range of [state] belonging to [matchId], or null when the sample is
-  /// not a shape we understand.
-  ///
-  /// A 16-channel sample is a single match and is returned whole; a 32-channel
-  /// sample is parallel 1v1 and is sliced. Returning null rather than throwing
-  /// keeps a malformed sample from escaping the inbox listener and cancelling
-  /// the subscription, which would stop all physics for the rest of the round.
-  static ({int start, int end})? sliceForMatch(int length, int matchId) {
-    if (length == perMatch) return (start: 0, end: perMatch);
-    if (length == oneVOneTotal) {
-      if (matchId < 0 || matchId >= matchesInOneVOne) return null;
-      final start = matchId * perMatch;
-      return (start: start, end: start + perMatch);
-    }
-    return null;
-  }
 
   /// Whether a team's slice is unchanged, element by element.
   ///

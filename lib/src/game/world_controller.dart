@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flame/components.dart';
 import 'package:rise_together_game/src/attributes/resetable.dart';
 import 'package:rise_together_game/src/game/action_system.dart';
@@ -26,6 +27,16 @@ class WorldController with AppLogging, Resetable {
   /// cannot release each other early.
   int _inputLockDepth = 0;
   bool get inputLocked => _inputLockDepth > 0;
+
+  /// Whether the paddle and ball are being held at their start pose under the
+  /// current lock. See [holdAtStart] and [enforceLock].
+  bool _holding = false;
+  bool _lockMoveReported = false;
+  String _lockReason = '';
+
+  /// How far a held paddle may be from its start pose before that counts as
+  /// movement, in world units and radians.
+  static const double lockedPoseTolerance = 1e-3;
   TimerComponent? _controlReversalTimer;
 
   /// Team context providing consolidated team information
@@ -122,10 +133,52 @@ class WorldController with AppLogging, Resetable {
   /// anything already in it and whatever arrives by another path.
   ///
   /// Actions keep being recorded while locked; they are just not applied.
-  void lockInput() {
-    _inputLockDepth++;
+  ///
+  /// A count rather than a flag: overlapping countdowns for one team must not
+  /// release each other early. [reason] is for the log.
+  void lockInput({String reason = 'countdown'}) {
+    if (_inputLockDepth++ == 0) {
+      _lockReason = reason;
+      _lockMoveReported = false;
+    }
     world.paddle.setThrust(0.0, 0.0);
-    appLog.fine('Input locked for team ${_teamContext.teamId}');
+    appLog.fine('Input locked for team ${_teamContext.teamId} ($reason)');
+  }
+
+  /// Put the ball and paddle at rest in their start pose and keep them there
+  /// until the lock ends. Call under [lockInput], once whatever the countdown
+  /// is for (a reset, a level load) has put the world in place.
+  void holdAtStart() {
+    if (!inputLocked) return;
+    actionStream.clearAllActions();
+    world.paddle.clearMotion();
+    world.ball.clearMotion();
+    _holding = true;
+  }
+
+  /// Keep a held team where [holdAtStart] put it. Called every step by the
+  /// world that owns the physics.
+  ///
+  /// During a countdown the ball and paddle sit at their start pose with no
+  /// velocity, whatever anyone is pressing or whatever was in flight. If
+  /// something moved them since the last step that is logged once per lock
+  /// before it is undone, so the path that did it can be found.
+  void enforceLock() {
+    if (!_holding) return;
+    final paddle = world.paddle;
+    final dy = paddle.position.y - paddle.startPosition.y;
+    final dAngle = paddle.body.angle;
+    if (!_lockMoveReported &&
+        (dy.abs() > lockedPoseTolerance ||
+            dAngle.abs() > lockedPoseTolerance)) {
+      _lockMoveReported = true;
+      appLog.warning(
+        'Team ${_teamContext.teamId} paddle moved while held for a countdown '
+        '($_lockReason): dy=$dy dAngle=$dAngle',
+      );
+    }
+    paddle.clearMotion();
+    world.ball.clearMotion();
   }
 
   /// End a [lockInput] window. Everything recorded while locked is dropped,
@@ -134,6 +187,7 @@ class WorldController with AppLogging, Resetable {
   void unlockInput() {
     if (_inputLockDepth == 0) return;
     if (--_inputLockDepth > 0) return;
+    _holding = false;
     actionStream.clearAllActions();
     world.paddle.setThrust(0.0, 0.0);
     appLog.fine('Input unlocked for team ${_teamContext.teamId}');
