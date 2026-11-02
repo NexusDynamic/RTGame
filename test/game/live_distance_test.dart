@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/game/distance_tracker.dart';
+
 import '../helpers/test_helpers.dart';
 
 /// The off-screen opponent cue asks "how far apart are the two balls *right

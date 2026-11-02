@@ -12,10 +12,11 @@ class LobbyConfig {
     this.stunUrls = const [],
     this.turnUrls = const [],
     this.turnSecret,
-    this.turnCredentialTtl = const Duration(minutes: 10),
+    this.turnCredentialTtl = const Duration(hours: 2),
     this.maxRooms = 200,
     this.maxLobbyConnections = 1000,
     this.maxConnectionsPerIp = 8,
+    this.maxRoomsPerIp = 4,
     this.roomTtl = const Duration(hours: 2),
     this.privateRoomTtl = const Duration(minutes: 15),
     this.sessionTokenTtl = const Duration(minutes: 15),
@@ -55,11 +56,19 @@ class LobbyConfig {
 
   /// coturn's `static-auth-secret`. Never leaves the server.
   final String? turnSecret;
+
+  /// How long a player's TURN credential lasts. At least [roomTtl]: coturn
+  /// checks the expiry on every allocation refresh, so a shorter one cut
+  /// relayed players off mid-match.
   final Duration turnCredentialTtl;
 
   final int maxRooms;
   final int maxLobbyConnections;
   final int maxConnectionsPerIp;
+
+  /// Open rooms any one client address (an IPv6 /64) may be in. Without it
+  /// one address could hold every room for [roomTtl] and starve everyone.
+  final int maxRoomsPerIp;
   final Duration roomTtl;
   final Duration privateRoomTtl;
   final Duration sessionTokenTtl;
@@ -87,10 +96,11 @@ class LobbyConfig {
       stunUrls: _list(e['STUN_URLS']),
       turnUrls: _list(e['TURN_URLS']),
       turnSecret: e['TURN_SECRET'],
-      turnCredentialTtl: Duration(seconds: intOf('TURN_TTL_SECONDS', 600)),
+      turnCredentialTtl: Duration(seconds: intOf('TURN_TTL_SECONDS', 7200)),
       maxRooms: intOf('MAX_ROOMS', 200),
       maxLobbyConnections: intOf('MAX_LOBBY_CONNECTIONS', 1000),
       maxConnectionsPerIp: intOf('MAX_CONNECTIONS_PER_IP', 8),
+      maxRoomsPerIp: intOf('MAX_ROOMS_PER_IP', 4),
     );
   }
 }

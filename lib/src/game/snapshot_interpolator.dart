@@ -117,11 +117,12 @@ class SnapshotInterpolator {
         );
   }
 
-  /// Per channel of [b]: whether its team teleported since [a]. Teams [a]
-  /// does not cover count as teleported, so they take [b] as is.
+  /// Per channel of [b]: whether its team teleported since [a], or is one of
+  /// [snapTeams] (channel offsets). Teams [a] does not cover count as
+  /// teleported, so they take [b] as is.
   ///
   /// The returned list is reused by the next call.
-  List<bool> _snapMask(List<double> a, List<double> b) {
+  List<bool> _snapMask(List<double> a, List<double> b, Set<int> snapTeams) {
     if (_snap.length != b.length) _snap = List<bool>.filled(b.length, true);
     final mask = _snap..fillRange(0, b.length, true);
     for (
@@ -130,7 +131,7 @@ class SnapshotInterpolator {
       offset += PhysicsChannels.perTeam
     ) {
       if (offset + PhysicsChannels.perTeam > a.length) continue;
-      final snap = _teleported(a, b, offset);
+      final snap = snapTeams.contains(offset) || _teleported(a, b, offset);
       mask.fillRange(offset, offset + PhysicsChannels.perTeam, snap);
     }
     return mask;
@@ -138,8 +139,13 @@ class SnapshotInterpolator {
 
   /// The state to show at [now], or null with no samples.
   ///
+  /// Teams whose channel offsets are in [snapTeams] are neither blended nor
+  /// projected: they show the newer sample as is. For a team held still in a
+  /// countdown, where projecting the reset jump as if it were motion would
+  /// draw the ball and paddle off their start pose until GO.
+  ///
   /// The returned list is reused by the next call; copy it to keep it.
-  List<double>? sample(double now) {
+  List<double>? sample(double now, {Set<int> snapTeams = const {}}) {
     if (_states.isEmpty) return null;
     final renderTime = now - delay;
 
@@ -156,7 +162,7 @@ class SnapshotInterpolator {
       _lastSampleTime = _times.last;
       if (_states.length < 2) return out..setAll(0, newest);
       final previous = _states[_states.length - 2];
-      final snap = _snapMask(previous, newest);
+      final snap = _snapMask(previous, newest, snapTeams);
       final span = _times.last - _times[_times.length - 2];
       final lead = math.min(renderTime - _times.last, maxExtrapolation);
       for (var i = 0; i < newest.length; i++) {
@@ -186,7 +192,7 @@ class SnapshotInterpolator {
     final b = _states[i + 1];
     final t = (renderTime - _times[i]) / (_times[i + 1] - _times[i]);
     _lastSampleTime = _times[i + 1];
-    final snap = _snapMask(a, b);
+    final snap = _snapMask(a, b, snapTeams);
     final out = _outFor(b.length);
     for (var c = 0; c < b.length; c++) {
       if (!isContinuous(c) || c >= a.length || snap[c]) {

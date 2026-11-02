@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:rise_together_game/src/attributes/resetable.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
@@ -254,8 +255,8 @@ class TournamentManager extends ChangeNotifier with AppLogging, Resetable {
 
   /// Update round elapsed time
   void updateRoundTime(double elapsedSeconds) {
+    // No notify: called every frame, and nothing listens for elapsed time.
     _currentRoundElapsedTime = elapsedSeconds;
-    notifyListeners();
   }
 
   /// Update the current distance for a team

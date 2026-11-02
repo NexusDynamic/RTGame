@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+
 import '../services/app_logging.dart';
 
 /// Countdown states
@@ -39,6 +41,20 @@ class CountdownSystem extends ChangeNotifier with AppLogging {
   final VoidCallback? onUnlocked;
 
   CountdownSystem({this.onPlayLo, this.onPlayHi, this.onUnlocked});
+
+  /// Seconds between the 3, 2, 1, GO and finished steps.
+  static const int stepSeconds = 1;
+
+  /// How long a countdown started with [message] (and [messageDuration] for
+  /// it) lasts from start to finished: the message, if any, then four steps.
+  ///
+  /// For whoever has to wait out a countdown that runs on another device.
+  static Duration lengthOf({String? message, double messageDuration = 2.0}) {
+    final messageMs = message != null && message.isNotEmpty
+        ? (messageDuration * 1000).round()
+        : 0;
+    return Duration(milliseconds: messageMs + 4 * stepSeconds * 1000);
+  }
 
   /// Optional message to display before countdown
   String? _message;
@@ -101,7 +117,13 @@ class CountdownSystem extends ChangeNotifier with AppLogging {
 
     // Fresh run identity, created *after* the supersede-cancel above so that
     // cancel's completion cannot leak into this run's waiters.
-    _runCompleter = Completer<void>();
+    final run = _runCompleter = Completer<void>();
+    // Whether this call has been superseded (cancelled, or replaced by a newer
+    // startCountdown) while it was awaiting. Checked after every await: a
+    // superseded call that carried on would start a second Timer.periodic that
+    // nothing cancels, running the countdown at double speed and outliving
+    // dispose().
+    bool superseded() => !identical(run, _runCompleter) || run.isCompleted;
 
     _message = message;
     // Set active state BEFORE notifying overlay so isActive == true the moment
@@ -122,7 +144,7 @@ class CountdownSystem extends ChangeNotifier with AppLogging {
       await Future.delayed(
         Duration(milliseconds: (messageDuration * 1000).toInt()),
       );
-      if (_currentState != CountdownState.message) {
+      if (superseded() || _currentState != CountdownState.message) {
         // Countdown was cancelled during message display. cancel() has already
         // finished the run; just fire this call's own completion hook.
         onAnyComplete?.call();
@@ -140,9 +162,16 @@ class CountdownSystem extends ChangeNotifier with AppLogging {
       await onPlayLo!();
       appLog.info('First countdown sound played');
     }
+    if (superseded()) {
+      onAnyComplete?.call();
+      return;
+    }
 
     // Schedule countdown steps
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: stepSeconds), (
+      timer,
+    ) async {
       switch (_currentState) {
         case CountdownState.message:
           // Should not reach here, but handle gracefully

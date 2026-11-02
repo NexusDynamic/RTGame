@@ -3,9 +3,13 @@ import 'package:rise_together_game/src/game/distance_tracker.dart';
 import 'package:rise_together_game/src/game/game_geometry.dart';
 import 'package:rise_together_game/src/game/rise_together_game.dart';
 import 'package:rise_together_game/src/game/tournament_manager.dart';
+
 import '../helpers/test_game.dart';
+
 import 'package:rise_together_game/src/game/action_system.dart';
+
 import '../helpers/test_helpers.dart';
+
 import 'package:rise_together_game/src/settings/app_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,13 +1,16 @@
 import 'dart:math' as math;
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:rise_together_game/src/game/opponent_view.dart';
 import 'package:rise_together_game/src/game/rise_together_game.dart';
 import 'package:rise_together_game/src/models/team_context.dart';
 
-/// Distance from the viewport edge to the arrow, in logical pixels.
-const double _edgeInset = 32.0;
+/// Distance from the viewport edge to the arrow, in logical pixels. The top
+/// one clears the timer and peak rows drawn along the top of the screen.
+const double _topInset = 100.0;
+const double _bottomInset = 32.0;
 
 /// Half-width / height of the arrow triangle, in logical pixels.
 const double _arrowHalfWidth = 17.0;
@@ -141,7 +144,10 @@ class OpponentOffscreenIndicator extends PositionComponent
     final cue = _cue;
     if (cue == null) return;
 
-    final text = OpponentView.label(cue);
+    final text = OpponentView.label(
+      cue,
+      translate: (key, args) => key.tr(args: args),
+    );
     if (text != _lastLabel) {
       _lastLabel = text;
       _label.text = text;
@@ -170,14 +176,14 @@ class OpponentOffscreenIndicator extends PositionComponent
     if (cue.up) {
       position.setValues(
         trackedX.clamp(margin, math.max(margin, size.x - margin)),
-        _edgeInset,
+        _topInset,
       );
       _label.anchor = Anchor.topCenter;
       _label.position.setValues(0, _arrowHeight / 2 + _labelGap);
     } else {
       position.setValues(
         trackedX.clamp(margin, math.max(margin, size.x - margin)),
-        size.y - _edgeInset,
+        size.y - _bottomInset,
       );
       _label.anchor = Anchor.bottomCenter;
       _label.position.setValues(0, -_arrowHeight / 2 - _labelGap);

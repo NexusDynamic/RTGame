@@ -183,7 +183,8 @@
     "customLevelsChosen": "{} · {} baner",
     "quickMatchCustomHelp": "Spil med andre, der har valgt egne baner",
     "customLevelsNotice": "Denne kamp bruger baner lavet af en spiller, ikke standardbanerne. Vil du ikke det, så annullér nu.",
-    "customBadge": "EGNE BANER"
+    "customBadge": "EGNE BANER",
+    "reconnecting": "Forbindelsen blev afbrudt. Genopretter…"
   },
   "solo": {
     "title": "Spil alene",
@@ -271,5 +272,11 @@
     "packOrder": "Baner i rækkefølge ({} / {})",
     "addLevel": "Tilføj en bane",
     "pickTitle": "Vælg baner at spille"
+  },
+  "opponent": {
+    "metresAhead": "{} m foran",
+    "metresBehind": "{} m bagud",
+    "level": "{} niveau",
+    "levels": "{} niveauer"
   }
 }

@@ -2,8 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:rise_together_game/src/game/action_system.dart';
+
 import '../helpers/test_game.dart';
 import '../helpers/test_helpers.dart';
+
 import 'package:rise_together_game/src/settings/app_settings.dart';
 
 /// Teardown of a game the phase system is finished with.

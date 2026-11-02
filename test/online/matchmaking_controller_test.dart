@@ -181,4 +181,40 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(server.matchmaker.waitingCount, 0);
   });
+
+  test('cancelling while connecting to players releases the session', () async {
+    // Regression: cancel() released only a session already handed back by
+    // connect(); one still connecting was kept open in the background, with
+    // its peer connections and hub socket, and the other players waited on it.
+    await startServer();
+    final adapters = <FakeRtcPeerAdapter>[];
+    final c = MatchmakingController(
+      lobby: LobbyClient(Uri.parse('http://127.0.0.1:${server.port}')),
+      adapterFactory: (self) {
+        final adapter = FakeRtcPeerAdapter(selfKey: self, bus: bus);
+        adapters.add(adapter);
+        return adapter;
+      },
+      timings: timings,
+    );
+    controllers.add(c);
+    const request = QuickMatch(mode: LobbyMode.versus, players: 2);
+    final other = controller();
+    final running = run(c, request);
+    unawaited(run(other, request));
+
+    await reach<ConnectingToPlayers>(c);
+    await c.cancel();
+    await running.timeout(const Duration(seconds: 30));
+
+    expect(adapters, isNotEmpty);
+    for (final adapter in adapters) {
+      expect(
+        bus.adapterFor(adapter.selfKey),
+        isNull,
+        reason: 'the cancelled session must close its WebRTC adapter',
+      );
+    }
+    await other.cancel();
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

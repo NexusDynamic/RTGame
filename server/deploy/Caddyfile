@@ -22,6 +22,9 @@
 			Cross-Origin-Embedder-Policy require-corp
 			X-Content-Type-Options nosniff
 			Referrer-Policy no-referrer
+			# Nobody may frame the game (clickjacking).
+			Content-Security-Policy "frame-ancestors 'none'"
+			X-Frame-Options DENY
 		}
 		try_files {path} /index.html
 		file_server

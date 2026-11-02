@@ -1,0 +1,29 @@
+# To regenerate the launcher icons after the source images change:
+#   dart run launcher_icons
+launcher_icons:
+  image_path: "assets/icon/RiseTogether-appicon.png"
+
+  android:
+    generate: true
+    image_path: "assets/icon/RiseTogether-appicon-960.png"
+    adaptive_icon_background: "assets/icon/RiseTogether-appicon_bg-adaptive.png"
+    adaptive_icon_foreground: "assets/icon/RiseTogether-appicon_fg-adaptive.png"
+
+  ios:
+    generate: true
+    remove_alpha: true
+    background_color: "#000000"
+
+  web:
+    generate: true
+    # The square artwork is full-bleed, so use it as-is for maskable icons
+    # rather than padding the base image onto a background.
+    image_path_maskable: "assets/icon/RiseTogether-appicon-960.png"
+    background_color: "#000000"
+
+  windows:
+    generate: true
+    image_path_wide: "assets/icon/RiseTogether-appicon-w-960h.png"
+
+  macos:
+    generate: true

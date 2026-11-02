@@ -1,5 +1,8 @@
 import 'dart:ui';
 
+/// Looks up a translation [key], filling its `{}` placeholders with [args].
+typedef LabelTranslator = String Function(String key, List<String> args);
+
 /// The rules governing the single-view opponent display.
 ///
 /// When `ui.single_view_opponent` is on, the opponent is no longer given a
@@ -110,20 +113,42 @@ abstract final class OpponentView {
     cue.intensity,
   )!;
 
-  /// The cue's label, e.g. `+1, 573 m` or just `573 m`.
+  /// The cue's label, e.g. `573 m ahead (+1 level)` or just `573 m behind`.
   ///
-  /// The level delta is omitted when zero rather than rendered as `+0`, and
-  /// the metre gap is shown unsigned -- the arrow already carries the sign,
-  /// and a signed number beside an arrow reads as a contradiction whenever
-  /// the two are derived differently (which they are, across a level
-  /// boundary: the arrow follows the level, the metres follow the tracker).
-  static String label(OpponentCue cue) {
-    final metres = '${cue.metresDelta.abs().toStringAsFixed(0)} m';
+  /// The direction is spelled out, and the level difference kept apart in
+  /// brackets: a bare `+1, 573 m` was easy to read as one signed number.
+  ///
+  /// [translate] looks up a translation key with positional arguments; the
+  /// default is English, for tests and anywhere without localization.
+  static String label(OpponentCue cue, {LabelTranslator? translate}) {
+    final t = translate ?? _english;
+    final distance = cue.metresDelta.abs().toStringAsFixed(0);
+    final metres = t(
+      cue.up ? 'opponent.metresAhead' : 'opponent.metresBehind',
+      [distance],
+    );
     if (cue.levelDelta == 0) return metres;
     final sign = cue.levelDelta > 0 ? '+' : '-';
-    // Comma, not whitespace: `+1 573 m` reads as one number that has been
-    // signed and spaced, which is exactly the misreading to avoid.
-    return '$sign${cue.levelDelta.abs()}, $metres';
+    final levels = cue.levelDelta.abs();
+    final levelText = t(levels == 1 ? 'opponent.level' : 'opponent.levels', [
+      '$sign$levels',
+    ]);
+    return '$metres ($levelText)';
+  }
+
+  static const Map<String, String> _englishText = {
+    'opponent.metresAhead': '{} m ahead',
+    'opponent.metresBehind': '{} m behind',
+    'opponent.level': '{} level',
+    'opponent.levels': '{} levels',
+  };
+
+  static String _english(String key, List<String> args) {
+    var text = _englishText[key] ?? key;
+    for (final arg in args) {
+      text = text.replaceFirst('{}', arg);
+    }
+    return text;
   }
 }
 

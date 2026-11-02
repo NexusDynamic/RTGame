@@ -35,8 +35,18 @@ class Room {
   final void Function(Room) _onClosed;
 
   final Set<_Proxy> _proxies = {};
+
+  /// Attaches past the capacity check but still connecting upstream, counted
+  /// so concurrent attaches cannot overshoot it.
+  int _reserved = 0;
+
+  /// Most sockets connected at once. A room that never sees all its players
+  /// within [connectGrace] is closed: a match cannot start without them, and
+  /// one connected socket used to keep a room alive for its whole [ttl].
+  int _peak = 0;
   Timer? _ttlTimer;
   Timer? _idleTimer;
+  Timer? _connectTimer;
   bool _closed = false;
 
   /// How long matched players have to connect, and to come back after the
@@ -68,16 +78,19 @@ class Room {
     );
     final room = Room._(id, secret, mode, players, hub, onClosed);
     room._ttlTimer = Timer(ttl, () => room.close('ttl'));
-    room._idleTimer = Timer(connectGrace, () => room.close('nobody came'));
+    room._connectTimer = Timer(connectGrace, () {
+      if (room._peak < players) room.close('not everyone came');
+    });
     return room;
   }
 
   /// Forward [client]'s WebSocket to this room's hub.
   Future<void> attach(WebSocketChannel client) async {
-    if (_closed || _proxies.length >= players * 2) {
+    if (_closed || _proxies.length + _reserved >= players * 2) {
       await client.sink.close(1013, 'room full'); // 1013: try again later
       return;
     }
+    _reserved++;
     final WebSocketChannel upstream;
     try {
       upstream = WebSocketChannel.connect(_hub.uri);
@@ -85,6 +98,13 @@ class Room {
     } catch (e) {
       _log.warning('Room $id: hub unreachable: $e');
       await client.sink.close(WebSocketStatus.internalServerError);
+      return;
+    } finally {
+      _reserved--;
+    }
+    if (_closed) {
+      await upstream.sink.close();
+      await client.sink.close(1013, 'room closed');
       return;
     }
     _idleTimer?.cancel();
@@ -96,6 +116,7 @@ class Room {
       }
     });
     _proxies.add(proxy);
+    if (_proxies.length > _peak) _peak = _proxies.length;
   }
 
   Future<void> close(String reason) async {
@@ -103,6 +124,7 @@ class Room {
     _closed = true;
     _ttlTimer?.cancel();
     _idleTimer?.cancel();
+    _connectTimer?.cancel();
     _log.info('Room $id closing: $reason');
     for (final proxy in _proxies.toList()) {
       await proxy.close();

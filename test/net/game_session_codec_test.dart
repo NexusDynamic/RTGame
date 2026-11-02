@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rise_together_game/src/game/physics_channels.dart';
 import 'package:rise_together_game/src/models/player_action.dart';
 import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/net/player_assignment.dart';
@@ -179,10 +180,43 @@ void main() {
   });
 
   group('validPhysicsSample', () {
-    List<double> sample([double fill = 0]) => List.filled(16, fill);
+    /// A plausible sample: positions at [fill], width 1.7, one player
+    /// pressing left on each team.
+    List<double> sample([double fill = 0]) {
+      final s = List<double>.filled(16, fill);
+      for (final offset in [0, PhysicsChannels.perTeam]) {
+        s[offset + PhysicsChannels.paddleWidthMultiplier] = 1.7;
+        s[offset + PhysicsChannels.leftBitflags] = 1;
+        s[offset + PhysicsChannels.rightBitflags] = 0;
+      }
+      return s;
+    }
 
     test('accepts a normal sample', () {
       expect(validPhysicsSample(sample(1.5), expectedLength: 16), isTrue);
+    });
+
+    // A negative bitflag hung every follower: `-1 >> 1 == -1`.
+    for (final bad in [-1.0, 0.5, 256.0, 1e5]) {
+      test('rejects bitflags of $bad', () {
+        final s = sample()..[PhysicsChannels.rightBitflags] = bad;
+        expect(validPhysicsSample(s, expectedLength: 16), isFalse);
+        final t = sample()
+          ..[PhysicsChannels.perTeam + PhysicsChannels.leftBitflags] = bad;
+        expect(validPhysicsSample(t, expectedLength: 16), isFalse);
+      });
+    }
+
+    for (final bad in [0.0, -1.0, 0.01, 1e4]) {
+      test('rejects a paddle width of $bad', () {
+        final s = sample()..[PhysicsChannels.paddleWidthMultiplier] = bad;
+        expect(validPhysicsSample(s, expectedLength: 16), isFalse);
+      });
+    }
+
+    test('accepts every player pressing', () {
+      final s = sample()..[PhysicsChannels.leftBitflags] = maxBitflags * 1.0;
+      expect(validPhysicsSample(s, expectedLength: 16), isTrue);
     });
 
     test('rejects the wrong length', () {

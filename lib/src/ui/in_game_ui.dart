@@ -58,7 +58,16 @@ class InGameUI extends StatelessWidget
     implements RiseTogetherOverlay {
   static final String overlayID = 'inGameUI';
   final RiseTogetherGameBase game;
-  final ButtonStateController _buttonController = ButtonStateController();
+
+  /// One controller per game, not per widget. The overlay builder makes a new
+  /// InGameUI on every rebuild (a resize, a rotation, a team context change),
+  /// and a controller created per instance lost the held button: on release
+  /// the new one reported nothing held, `none` was never sent, and the paddle
+  /// kept driving itself. Weakly keyed, so it goes with the game.
+  static final Expando<ButtonStateController> _controllers =
+      Expando<ButtonStateController>('buttonStateController');
+  ButtonStateController get _buttonController =>
+      _controllers[game] ??= ButtonStateController();
 
   InGameUI(this.game, {super.key});
 

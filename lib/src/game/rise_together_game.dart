@@ -205,7 +205,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   List<Map<String, dynamic>> get playerBitFlagsList =>
       List.unmodifiable(_playerBitflagsList);
   final List<Map<String, dynamic>> _playerBitflagsList = [];
-  final Map<String, int> _cachedPlayerBitflags = {};
+
+  /// Replaced, never mutated, when the roster changes: team streams cache
+  /// their thrust against this map's identity (see TeamActionStream).
+  Map<String, int> _cachedPlayerBitflags = {};
   int? _cachedPlayerCount;
 
   // Notifier for bitflag changes (for UI reactivity)
@@ -232,6 +235,23 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   /// Smooths the authority's state for display, on followers.
   final SnapshotInterpolator _interpolator = SnapshotInterpolator();
 
+  /// When each team's current countdown ends, on a follower, by
+  /// [_nowSeconds]. Kept for every team, not just the player's: while a team
+  /// counts down the authority holds it at its start pose, so the follower
+  /// shows the newest sample instead of projecting the reset as motion.
+  final Map<int, double> _teamCountdownEndsAt = {};
+
+  /// Channel offsets of the teams in a countdown, rebuilt each frame.
+  final Set<int> _countdownTeamOffsets = {};
+
+  void _noteTeamCountdown(int teamId, int? levelIndex) {
+    _teamCountdownEndsAt[teamId] =
+        _nowSeconds() +
+        CountdownSystem.lengthOf(message: _levelMessage(levelIndex))
+                .inMicroseconds /
+            1e6;
+  }
+
   /// Per team, when (on [_nowSeconds]'s clock) this follower loaded a new
   /// level. Samples that arrived by then describe the previous level; applied
   /// in the new one they flashed whatever sat at that height for a frame.
@@ -254,27 +274,79 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   /// Whether the authority applies input for [teamId] right now.
   bool acceptsInputFor(int teamId) => !_inputLockedTeams.contains(teamId);
 
-  /// Run [body] with [teamId]'s input ignored and held input dropped.
+  /// The one way a team's play is interrupted and resumed, on the authority.
+  ///
+  /// In order: the team's input is locked (here and in [acceptsInputFor]);
+  /// [prepare] runs (a reset, a level load); the ball and paddle are put at
+  /// rest in their start pose and held there; the countdown runs; whatever
+  /// was pressed meanwhile is dropped; the lock ends. So nothing held or in
+  /// flight moves the paddle during the countdown.
+  ///
+  /// The player's own team counts down here and mirrors each step to its
+  /// teammates; any other team counts down on its players' devices from one
+  /// trigger while this waits out the same length. [levelIndex], when set,
+  /// announces that level first.
   ///
   /// Local players are already blocked by the countdown check in
   /// [sendAction]; remote players' clients cannot be trusted to do the same,
   /// and their held state is re-sent periodically, so the authority enforces
   /// it. Held buttons take effect again within one resend after the lock.
-  Future<R> withTeamInputLocked<R>(
-    int teamId,
-    Future<R> Function() body,
-  ) async {
+  ///
+  /// The other team is not interrupted: the engine keeps running.
+  Future<void> runTeamCountdown(
+    int teamId, {
+    required String reason,
+    int? levelIndex,
+    Future<void> Function()? prepare,
+  }) async {
+    final controller = _controllerForTeam(teamId);
     _inputLockedTeams.add(teamId);
     actionManager.getTeamStream(teamId)?.clearAllActions();
-    final controller = _controllerForTeam(teamId);
-    controller?.lockInput();
+    controller?.lockInput(reason: reason);
     try {
-      return await body();
+      await prepare?.call();
+      // A countdown can outlive its game. Nothing is left to hold or count
+      // down for then, and the bodies it would move are gone: see onRemove().
+      if (_removed) return;
+      controller?.holdAtStart();
+
+      if (controller?.teamContext.isPlayerTeam ?? false) {
+        overlay.add('countdown');
+        void broadcastListener() => broadcastEvent(
+          TeamCountdownState(
+            teamId: teamId,
+            stateIndex: countdownSystem.currentState.index,
+            levelIndex: levelIndex,
+          ),
+        );
+        countdownSystem.addListener(broadcastListener);
+        try {
+          final message = _levelMessage(levelIndex);
+          await countdownSystem.startCountdown(
+            message: message,
+            messageDuration: message == null ? 0.0 : 2.0,
+          );
+          // Scoped to the run just started, so a superseding countdown
+          // releases this one rather than stranding it.
+          await countdownSystem.runCompletion;
+        } finally {
+          countdownSystem.removeListener(broadcastListener);
+          overlay.remove('countdown');
+        }
+      } else {
+        // The other team: trigger their countdown without touching ours, so
+        // two teams finishing at once cannot conflict.
+        await broadcastTeamCountdownDirect(teamId, levelIndex);
+      }
     } finally {
       _inputLockedTeams.remove(teamId);
       controller?.unlockInput();
     }
   }
+
+  /// Set in [onRemove]. Work that awaits (level loads, countdowns) checks it
+  /// before touching a world whose physics may have been destroyed.
+  bool _removed = false;
 
   /// Round and trial being played, passed through to [TournamentManager].
   int _currentRound = 0;
@@ -445,9 +517,13 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         return KeyEventResult.handled;
       } else if (isKeyUp) {
         _tempLeftDown = false;
-        if (!_tempRightDown) {
-          sendAction(0, 'keyboard_player', PaddleAction.none);
-        }
+        // Back to whatever is still held: staying silent left the paddle on
+        // `left` while only Right was down.
+        sendAction(
+          0,
+          'keyboard_player',
+          _tempRightDown ? PaddleAction.right : PaddleAction.none,
+        );
         return KeyEventResult.handled;
       }
     } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
@@ -457,9 +533,11 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
         return KeyEventResult.handled;
       } else if (isKeyUp) {
         _tempRightDown = false;
-        if (!_tempLeftDown) {
-          sendAction(0, 'keyboard_player', PaddleAction.none);
-        }
+        sendAction(
+          0,
+          'keyboard_player',
+          _tempLeftDown ? PaddleAction.left : PaddleAction.none,
+        );
         return KeyEventResult.handled;
       }
     }
@@ -476,7 +554,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     _actionProvider = actionProvider;
 
     // Invalidate cached bitflags when changing providers
-    _cachedPlayerBitflags.clear();
+    _cachedPlayerBitflags = {};
     _cachedPlayerCount = null;
     _bitflagsNotifier.clear();
 
@@ -710,8 +788,10 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       try {
         await start.future.timeout(const Duration(seconds: 60));
       } on TimeoutException {
+        // Rethrown so the screen can say so and leave: returning quietly left
+        // the player on a paused game with no error and no way out.
         appLog.warning('Never saw the host start the round');
-        return;
+        rethrow;
       } finally {
         _awaitingStart = null;
       }
@@ -915,12 +995,12 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     final playerCount = _actionProvider!.playerAssignments.length;
     if (_cachedPlayerCount != playerCount) {
       initPlayerBitflags();
-      _cachedPlayerBitflags.clear();
-      for (final player in _playerBitflagsList) {
-        final bitflagValue = player['bitflagValue'] as int;
-        _cachedPlayerBitflags[player['playerId'] as String] = bitflagValue;
-        _cachedPlayerBitflags[player['nodeId'] as String] = bitflagValue;
-      }
+      _cachedPlayerBitflags = {
+        for (final player in _playerBitflagsList) ...{
+          player['playerId'] as String: player['bitflagValue'] as int,
+          player['nodeId'] as String: player['bitflagValue'] as int,
+        },
+      };
       _cachedPlayerCount = playerCount;
     }
 
@@ -1374,6 +1454,12 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
 
   /// A team countdown step from the authority; only this player's team shows it.
   void _handleTeamCountdownState(int teamId, int stateIndex, int? levelIndex) {
+    // Each step restarts the window from that step, which only over-covers.
+    if (stateIndex == CountdownState.finished.index) {
+      _teamCountdownEndsAt.remove(teamId);
+    } else {
+      _noteTeamCountdown(teamId, levelIndex);
+    }
     final myTeamId = currentPlayerAssignment?.teamId;
     if (myTeamId != null && myTeamId != teamId) return;
     _applyCountdownFromNetwork(stateIndex, _levelMessage(levelIndex));
@@ -1428,6 +1514,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     final newLevel = controller.currentLevel;
     Future.microtask(() async {
       await controller.world.loadLevel(newLevel);
+      if (_removed) return;
       // Lock in completed distance then set new baseline for the next level
       distanceTracker.saveCompletedDistance(teamId);
       distanceTracker.setStartingHeight(
@@ -1479,61 +1566,36 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     }
 
     final nextLevel = controller.currentLevel;
-    final isPlayerTeam = currentPlayerAssignment?.teamId == teamId;
 
     // Scheduled for after the contact callback: the world must not change
-    // during the physics step.
-    Future.microtask(() async {
-      await controller.world.loadLevel(nextLevel);
-
-      distanceTracker.saveCompletedDistance(teamId);
-      distanceTracker.setStartingHeight(
+    // during the physics step. The lock is taken before the level loads, so
+    // input arriving meanwhile cannot move the paddle in the new level. The
+    // engine keeps running: the other team must continue playing.
+    Future.microtask(
+      () => runTeamCountdown(
         teamId,
-        controller.world.ball.position.y,
-      );
+        reason: 'level_change',
+        levelIndex: nextLevelIndex,
+        prepare: () async {
+          await controller.world.loadLevel(nextLevel);
+          if (_removed) return;
 
-      broadcastEvent(
-        TeamLevelProgression(
-          teamId: teamId,
-          levelIndex: nextLevelIndex,
-          seed: tournamentManager.currentTournamentSeed ?? 0,
-        ),
-      );
+          distanceTracker.saveCompletedDistance(teamId);
+          distanceTracker.setStartingHeight(
+            teamId,
+            controller.world.ball.position.y,
+          );
 
-      // The engine keeps running -- the other team must continue playing.
-      // Input is blocked while countdownSystem.isActive.
-      final levelMessage = levelTransitionMessage(nextLevelIndex);
-
-      await withTeamInputLocked(teamId, () async {
-        if (isPlayerTeam) {
-          overlay.add('countdown');
-
-          void broadcastListener() => broadcastEvent(
-            TeamCountdownState(
+          broadcastEvent(
+            TeamLevelProgression(
               teamId: teamId,
-              stateIndex: countdownSystem.currentState.index,
               levelIndex: nextLevelIndex,
+              seed: tournamentManager.currentTournamentSeed ?? 0,
             ),
           );
-          countdownSystem.addListener(broadcastListener);
-
-          try {
-            await countdownSystem.startCountdown(
-              message: levelMessage,
-              messageDuration: 2.0,
-            );
-            await countdownSystem.runCompletion;
-          } finally {
-            countdownSystem.removeListener(broadcastListener);
-            overlay.remove('countdown');
-          }
-        } else {
-          // The other team: trigger their countdown without touching ours, so
-          // two teams finishing at once cannot conflict.
-          await broadcastTeamCountdownDirect(teamId, nextLevelIndex);
-        }
-      });
-    });
+        },
+      ),
+    );
   }
 
   /// Send a single countdown trigger for [teamId] and wait the equivalent
@@ -1545,14 +1607,14 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     broadcastEvent(
       TeamCountdownTrigger(teamId: teamId, levelIndex: levelIndex),
     );
-    if (levelIndex != null) {
-      await Future.delayed(const Duration(seconds: 2)); // message phase
-    }
-    await Future.delayed(const Duration(seconds: 4)); // 3-2-1-GO + brief GO
+    await Future.delayed(
+      CountdownSystem.lengthOf(message: _levelMessage(levelIndex)),
+    );
   }
 
   /// A one-shot countdown trigger from the authority: run it locally.
   void _handleTeamCountdownTrigger(int teamId, int? levelIndex) {
+    _noteTeamCountdown(teamId, levelIndex);
     final myTeamId = currentPlayerAssignment?.teamId;
     if (myTeamId != null && myTeamId != teamId) return;
     final message = _levelMessage(levelIndex);
@@ -1592,6 +1654,7 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
   Future<void> _clearStateBuffer() async {
     _interpolator.clear();
     _teamLevelLoadedAt.clear();
+    _teamCountdownEndsAt.clear();
   }
 
   Future<void> resumeGame() async {
@@ -1743,7 +1806,15 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
 
   /// Write the authority's (smoothed) state into the local worlds.
   void _applyPhysicsState() {
-    final state = _interpolator.sample(_nowSeconds());
+    final now = _nowSeconds();
+    _countdownTeamOffsets.clear();
+    if (_teamCountdownEndsAt.isNotEmpty) {
+      _teamCountdownEndsAt.removeWhere((_, endsAt) => endsAt <= now);
+      for (final teamId in _teamCountdownEndsAt.keys) {
+        _countdownTeamOffsets.add(PhysicsChannels.offsetForTeam(teamId));
+      }
+    }
+    final state = _interpolator.sample(now, snapTeams: _countdownTeamOffsets);
     if (state == null) return;
 
     for (final worldController in worldControllers.values) {
@@ -1802,27 +1873,32 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       final totalThrust =
           (_countSetBits(leftBitflags) + _countSetBits(rightBitflags)) /
           teamPlayerCount;
-      world.parallax?.parallax?.baseVelocity.setFrom(
+      final baseVelocity = world.parallax?.parallax?.baseVelocity;
+      if (baseVelocity != null) {
         parallaxVelocityForThrust(
           totalThrust,
           appSettings.getDouble('physics.thrust_multiplier'),
-        ),
-      );
+          baseVelocity,
+        );
+      }
     }
   }
 
   /// Count the set bits in [value] (players pressing, from bitflags).
-  int _countSetBits(int value) {
-    int count = 0;
-    while (value != 0) {
-      count += value & 1;
-      value >>= 1;
+  ///
+  /// Bounded to the bits a player can own: shifting a negative number right
+  /// never reaches zero, so an unbounded loop hung on a hostile sample.
+  static int _countSetBits(int value) {
+    var count = 0;
+    for (var bit = 0; bit < PhysicsChannels.maxPlayers; bit++) {
+      count += (value >> bit) & 1;
     }
     return count;
   }
 
   @override
   void onRemove() {
+    _removed = true;
     _cancelSessionSubscriptions();
     onRoundOver = null;
     _backgroundDriver?.cancel();
@@ -1832,7 +1908,9 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
     // running it outlives the game and ticks through a torn-down world.
     countdownSystem.dispose();
 
+    final physicsWorlds = <Forge2DWorld>[world];
     for (final controller in worldControllers.values) {
+      physicsWorlds.add(controller.world);
       controller.dispose();
     }
     // Cleared, not just disposed: a disposed controller left here would still
@@ -1843,7 +1921,23 @@ abstract class RiseTogetherGameBase<T extends RiseTogetherWorld>
       _actionProvider!.dispose();
       _actionProvider = null;
     }
+    // Each game is given its own manager; its team streams' controllers
+    // would otherwise stay open after the round.
+    actionManager.dispose();
 
     super.onRemove();
+
+    // Box2D keeps every world in a fixed table of 128, a Forge2DWorld never
+    // frees its own, and each game makes two. Left alone, the 65th game of an
+    // app launch cannot create its worlds ("The physics world could not be
+    // created"). Last, so the components above have let go of their bodies.
+    for (final physicsWorld in physicsWorlds) {
+      try {
+        final native = physicsWorld.physicsWorld;
+        if (native.isValid) native.destroy();
+      } catch (e, st) {
+        appLog.severe('Could not destroy a physics world: $e\n$st');
+      }
+    }
   }
 }

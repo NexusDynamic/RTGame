@@ -151,4 +151,29 @@ void main() {
       expect(interpolator.lastSampleTime, isNull);
     });
   });
+
+  group('snapTeams', () {
+    test('a team in a countdown is neither projected nor blended', () {
+      interpolator
+        ..add(state(y: 0), 1.0)
+        ..add(state(y: 1), 1.1);
+      final team0 = {PhysicsChannels.offsetForTeam(0)};
+      // Past the newest: the newest as is, not projected.
+      expect(interpolator.sample(1.23, snapTeams: team0)![ballY], 1);
+      // Between the two: the newer as is, not blended.
+      interpolator.add(state(y: 2), 1.2);
+      expect(interpolator.sample(1.25, snapTeams: team0)![ballY], 2);
+    });
+
+    test('only the listed teams snap', () {
+      interpolator
+        ..add(state(y: 0), 1.0)
+        ..add(state(y: 1), 1.1);
+      final team1 = {PhysicsChannels.offsetForTeam(1)};
+      expect(
+        interpolator.sample(1.23, snapTeams: team1)![ballY],
+        closeTo(1.3, 1e-9),
+      );
+    });
+  });
 }

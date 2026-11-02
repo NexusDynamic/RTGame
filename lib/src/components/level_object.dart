@@ -118,8 +118,7 @@ abstract class LevelObject extends BodyComponent<RiseTogetherGameBase>
     final fixtureDef = ShapeDef(
       material: SurfaceMaterial(friction: 0),
       userData: this,
-      isSensor:
-          true, // Sensor = triggers collision callbacks but no physical response
+      isSensor: true, // Sensor = triggers collision callbacks but no physical response
       enableSensorEvents: true,
     );
     // forge2d box2d v2

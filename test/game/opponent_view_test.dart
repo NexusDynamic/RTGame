@@ -133,12 +133,12 @@ void main() {
   group('label', () {
     test('omits the level field when the levels match', () {
       const cue = (up: true, levelDelta: 0, metresDelta: 573.4, intensity: 0.5);
-      expect(OpponentView.label(cue), '573 m');
+      expect(OpponentView.label(cue), '573 m ahead');
     });
 
-    test('separates the level delta from the metres with a comma', () {
+    test('spells out the direction and brackets the level delta', () {
       const cue = (up: true, levelDelta: 1, metresDelta: 573.4, intensity: 1.0);
-      expect(OpponentView.label(cue), '+1, 573 m');
+      expect(OpponentView.label(cue), '573 m ahead (+1 level)');
     });
 
     test('renders a negative level delta', () {
@@ -148,17 +148,17 @@ void main() {
         metresDelta: -420.0,
         intensity: 1.0,
       );
-      expect(OpponentView.label(cue), '-2, 420 m');
+      expect(OpponentView.label(cue), '420 m behind (-2 levels)');
     });
 
-    test('shows the metre gap unsigned, leaving the sign to the arrow', () {
+    test('shows the metre gap unsigned, with the direction in words', () {
       const behind = (
         up: false,
         levelDelta: 0,
         metresDelta: -573.4,
         intensity: 0.5,
       );
-      expect(OpponentView.label(behind), '573 m');
+      expect(OpponentView.label(behind), '573 m behind');
     });
   });
 

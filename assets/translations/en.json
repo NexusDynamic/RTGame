@@ -183,7 +183,8 @@
     "customLevelsChosen": "{} · {} levels",
     "quickMatchCustomHelp": "Play with others who chose custom levels",
     "customLevelsNotice": "This match uses player-made levels, not the standard ones. If you'd rather not, cancel now.",
-    "customBadge": "CUSTOM LEVELS"
+    "customBadge": "CUSTOM LEVELS",
+    "reconnecting": "Connection lost. Reconnecting…"
   },
   "solo": {
     "title": "Play solo",
@@ -271,5 +272,11 @@
     "packOrder": "Levels, in order ({} / {})",
     "addLevel": "Add a level",
     "pickTitle": "Choose levels to play"
+  },
+  "opponent": {
+    "metresAhead": "{} m ahead",
+    "metresBehind": "{} m behind",
+    "level": "{} level",
+    "levels": "{} levels"
   }
 }

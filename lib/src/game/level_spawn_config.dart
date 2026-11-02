@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flame/components.dart';
 import 'package:rise_together_game/src/components/level_object.dart';
 import 'package:rise_together_game/src/game/game_geometry.dart';

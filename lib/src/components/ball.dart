@@ -140,6 +140,14 @@ class Ball extends BodyComponent<RiseTogetherGameBase>
 
   @override
   void beginContact(Object other, Contact contact) {
+    // Only the device that simulates this ball acts on what it touches.
+    //
+    // An online follower draws the host's ball, but its local physics world
+    // still reports contacts for wherever that ball is drawn, and those are
+    // not the host's contacts. Acting on them started a restart countdown of
+    // the follower's own and locked its player out while the real game went
+    // on. Everything a contact leads to reaches a follower from the host.
+    if (!_world.gameRef.isAuthoritativePhysics) return;
     appLog.fine('Ball beginContact');
 
     if (other is Wall) {
@@ -155,6 +163,7 @@ class Ball extends BodyComponent<RiseTogetherGameBase>
 
   @override
   void endContact(Object other, Contact contact) {
+    if (!_world.gameRef.isAuthoritativePhysics) return;
     appLog.fine('Ball endContact with ${other.runtimeType}');
     if (other is LevelObject) {
       other.onBallEndContact(this);

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flame/components.dart' hide Matrix4;
 import 'package:flame/flame.dart';
 import 'package:flame/image_composition.dart' hide Matrix4;
@@ -15,10 +16,11 @@ import 'package:rise_together_game/src/models/team_context.dart';
 import 'package:rise_together_game/src/components/ball.dart';
 import 'package:rise_together_game/src/components/wall.dart';
 import 'package:rise_together_game/src/models/team.dart';
-import 'package:rise_together_game/src/net/game_session.dart';
 import 'package:rise_together_game/src/services/app_logging.dart';
 import 'package:rise_together_game/src/settings/app_settings.dart';
+
 import 'rise_together_game.dart';
+
 import 'package:rise_together_game/src/components/paddle.dart';
 import 'package:rise_together_game/src/game/level_spawn_config.dart';
 import 'package:rise_together_game/src/game/level_object_pool.dart';
@@ -94,15 +96,19 @@ const double kParallaxPerWorldVelocity = 0.128;
 /// follower path (`_interpolatePhysicsState`) so every game mode scrolls at the
 /// same speed for the same input. They were two copies of the same expression,
 /// which is exactly how they would drift.
+///
+/// Written into [out] when given, so per-frame callers allocate nothing.
 Vector2 parallaxVelocityForThrust(
   double totalThrust,
-  double thrustMultiplierSetting,
-) => Vector2(
-  0,
-  -GameGeometry.velocity(thrustMultiplierSetting) *
-      totalThrust *
-      kParallaxPerWorldVelocity,
-);
+  double thrustMultiplierSetting, [
+  Vector2? out,
+]) => (out ?? Vector2.zero())
+  ..setValues(
+    0,
+    -GameGeometry.velocity(thrustMultiplierSetting) *
+        totalThrust *
+        kParallaxPerWorldVelocity,
+  );
 
 class RiseTogetherWorld extends forge2d.Forge2DWorld
     with
@@ -393,14 +399,16 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     appLog.fine(
       'Restarting level with horizontal width: ${RiseTogetherLevel.horizontalWidth}.',
     );
-    clearActions();
-    resetBall();
+    if (!playerInitiated) {
+      clearActions();
+      resetBall();
+      return;
+    }
+    // A restart is the simulating device's decision; see Ball.beginContact.
+    if (!gameRef.isAuthoritativePhysics) return;
 
-    if (!playerInitiated) return;
-
-    // Prevent re-entrancy: if a player-initiated countdown is already in progress,
-    // ignore duplicate calls. This can happen when the ball simultaneously contacts
-    // two fatal walls, or when the contact callback fires multiple times.
+    // Prevent re-entrancy: the ball can touch two fatal walls at once, and a
+    // contact callback can fire more than once. One countdown per lost ball.
     if (_isRestartingLevel) {
       appLog.fine(
         'restartLevel() already in progress, ignoring duplicate call',
@@ -408,55 +416,23 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
       return;
     }
     _isRestartingLevel = true;
-
-    // Check if this is the player's team
-    final isPlayerTeam = _teamContext?.isPlayerTeam ?? false;
     final teamId = controller.team.teamId;
-
-    // Always count the reset regardless of whether we're the player's team.
-    // In headless/coordinator mode isPlayerTeam is always false, so counting
-    // here ensures resets are tracked in all deployment modes.
     gameRef.tournamentManager.incrementTeamResets(teamId);
 
-    // Only the player's own team sees a local countdown; the opponent team
-    // resets and carries on. The authority also triggers the opponent team's
-    // countdown on their devices.
-    if (!isPlayerTeam) {
-      if (gameRef.isCoordinator) {
-        await gameRef.withTeamInputLocked(
-          teamId,
-          () => gameRef.broadcastTeamCountdownDirect(teamId, null),
-        );
-      }
-      _isRestartingLevel = false;
-      return;
-    }
-
-    // The engine keeps running -- the other team must continue playing.
-    // Input is blocked while countdownSystem.isActive.
-    gameRef.overlays.add('countdown');
-
-    // Mirror each countdown step to this team's other players.
-    void broadcastCurrentState() => gameRef.broadcastEvent(
-      TeamCountdownState(
-        teamId: teamId,
-        stateIndex: gameRef.countdownSystem.currentState.index,
-      ),
-    );
-
-    // Everything below runs under try/finally: _isRestartingLevel gates every
-    // future restart, so leaving it set silently disables restarts.
+    // try/finally: _isRestartingLevel gates every future restart, so leaving
+    // it set silently disables restarts for the rest of the session.
     try {
-      gameRef.countdownSystem.addListener(broadcastCurrentState);
-      await gameRef.withTeamInputLocked(teamId, () async {
-        await gameRef.countdownSystem.startCountdown();
-        // Scoped to the run we just started, so a superseding countdown
-        // releases us rather than stranding _isRestartingLevel = true forever.
-        await gameRef.countdownSystem.runCompletion;
-      });
+      await gameRef.runTeamCountdown(
+        teamId,
+        reason: 'ball_lost',
+        // Under the lock, so nothing held or in flight moves the paddle
+        // between the reset and the countdown.
+        prepare: () async {
+          clearActions();
+          resetBall();
+        },
+      );
     } finally {
-      gameRef.countdownSystem.removeListener(broadcastCurrentState);
-      gameRef.overlays.remove('countdown');
       _isRestartingLevel = false;
     }
   }
@@ -635,6 +611,8 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
   @override
   void update(double dt) {
     if (gameRef.isAuthoritativePhysics) {
+      // A team in a countdown stays at its start pose, whatever is pressed.
+      controller.enforceLock();
       // Two passes so the common case (nothing consumed this frame) costs one
       // allocation-free scan. activeObjects is a live view, so the removal pass
       // must iterate a snapshot — release() mutates the underlying set.
@@ -660,7 +638,7 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
     }
     // Drive parallax from player thrust for authoritative-physics nodes only
     // (individual mode participants running LocalActionProvider). For follower
-    // nodes (1v1 / joint participants), _interpolatePhysicsState() drives the
+    // nodes (online followers), _interpolatePhysicsState() drives the
     // parallax via bitflags and must not be overwritten here.
     // Thrust-based (not ball velocity) avoids reversal when ball falls and
     // avoids jitter when the ball rolls across the paddle.
@@ -669,12 +647,14 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
         ball.isMounted) {
       final thrust = controller.actionStream.getCurrentThrust();
       final totalThrust = thrust.leftThrust + thrust.rightThrust;
-      parallax?.parallax?.baseVelocity.setFrom(
+      final baseVelocity = parallax?.parallax?.baseVelocity;
+      if (baseVelocity != null) {
         parallaxVelocityForThrust(
           totalThrust,
           appSettings.getDouble('physics.thrust_multiplier'),
-        ),
-      );
+          baseVelocity,
+        );
+      }
     }
     super.update(dt);
   }
@@ -736,6 +716,9 @@ class RiseTogetherWorld extends forge2d.Forge2DWorld
       appLog.fine('Adding wall: $wall');
     }
     addAll(walls);
+    // Replaced, not stacked: this runs on every level load, and the level
+    // teardown removes only walls and level objects.
+    _teamTextComponent?.removeFromParent();
     _teamTextComponent = TextComponent(
       text: _getTeamDisplayText(),
       anchor: Anchor.center,

@@ -44,6 +44,10 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
   final List<int> _wins = [0, 0];
 
   StreamSubscription<SessionEnd>? _ended;
+  StreamSubscription<bool>? _reconnectingSub;
+
+  /// The connection to the host dropped and is being re-established.
+  final ValueNotifier<bool> _reconnecting = ValueNotifier(false);
   StreamSubscription<GameEvent>? _events;
   bool _leaving = false;
 
@@ -60,6 +64,9 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
     super.initState();
     unawaited(AudioManager.instance.enterMusicScene(MusicScene.game));
     _ended = _session.ended.listen(_onEnded);
+    _reconnectingSub = _session.reconnecting.listen(
+      (value) => _reconnecting.value = value,
+    );
     if (!_session.isAuthority) {
       // Only the host decides when to play again.
       _events = _session.events.listen((event) {
@@ -99,7 +106,9 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       distanceTracker: DistanceTracker(),
     );
     game.onRoundOver = (result) {
-      if (!mounted || _game != game) return;
+      // One result per round: a repeated RoundOver (a modified host can send
+      // as many as it likes) must not count the win again.
+      if (!mounted || _game != game || _result != null) return;
       setState(() {
         _result = result;
         if (_session.rules.mode == MatchMode.versus && result.winner >= 0) {
@@ -121,13 +130,20 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       if (!mounted || _game != game) return;
     }
     final rules = _session.rules;
-    await game.startGameDirect(
-      mode: rules.mode == MatchMode.coop ? GameMode.individual : GameMode.joint,
-      durationSeconds: rules.roundDurationSeconds,
-      round: round,
-      seed: seed,
-      skipCountdown: false,
-    );
+    try {
+      await game.startGameDirect(
+        mode: rules.mode == MatchMode.coop
+            ? GameMode.individual
+            : GameMode.joint,
+        durationSeconds: rules.roundDurationSeconds,
+        round: round,
+        seed: seed,
+        skipCountdown: false,
+      );
+    } on TimeoutException {
+      // A follower that never saw the host start the round.
+      if (mounted && _game == game) _onEnded(SessionEnd.connectionLost);
+    }
   }
 
   /// Host only: start the next round for everyone.
@@ -163,6 +179,8 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
   @override
   void dispose() {
     unawaited(_ended?.cancel());
+    unawaited(_reconnectingSub?.cancel());
+    _reconnecting.dispose();
     unawaited(_events?.cancel());
     _game?.onRoundOver = null;
     _game?.matchPaused.removeListener(_onMatchPaused);
@@ -221,6 +239,12 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
                   ),
                 ),
               ),
+            ValueListenableBuilder(
+              valueListenable: _reconnecting,
+              builder: (context, reconnecting, _) => reconnecting
+                  ? const _ReconnectingBanner()
+                  : const SizedBox.shrink(),
+            ),
             ValueListenableBuilder(
               valueListenable: _hostAway.remaining,
               builder: (context, left, _) => left == null
@@ -283,6 +307,33 @@ class _OnlineGameScreenState extends State<OnlineGameScreen> with AppLogging {
       onBackToMenu: _leave,
     );
   }
+}
+
+/// Shown to a follower while its connection to the host is re-established.
+class _ReconnectingBanner extends StatelessWidget {
+  const _ReconnectingBanner();
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Card(
+      margin: const EdgeInsets.all(24),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'online.reconnecting'.tr(),
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Shown to followers while the host's app is in the background.

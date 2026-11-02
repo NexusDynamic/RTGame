@@ -35,9 +35,9 @@ class _LevelLibraryScreenState extends State<LevelLibraryScreen> {
 
   void _rebuild() => setState(() {});
 
-  void _snack(String message) => ScaffoldMessenger.of(
-    context,
-  ).showSnackBar(SnackBar(content: Text(message)));
+  void _snack(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   Future<void> _edit([String? id]) => Navigator.of(context).push(
     MaterialPageRoute<bool>(
