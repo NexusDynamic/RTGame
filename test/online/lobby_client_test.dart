@@ -13,6 +13,11 @@ void main() {
     // library sends this.
     final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(server.close);
+    // `sent` counts what the server's kernel accepted, not what the client
+    // read: loopback TCP buffers auto-tune to several MB on Linux, so the
+    // server gets well past the client's 64 KB budget before the reset comes
+    // back. The bound is just far above any socket buffering.
+    const limit = 64 * 1024 * 1024;
     var sent = 0;
     server.listen((socket) {
       final request = <int>[];
@@ -47,7 +52,7 @@ void main() {
         ];
         try {
           socket.add(frame(0x1));
-          for (var i = 0; i < 2000; i++) {
+          while (sent < limit) {
             socket.add(frame(0x0));
             sent += 4000;
             await socket.flush();
@@ -61,10 +66,12 @@ void main() {
     final client = LobbyClient(Uri.parse('http://127.0.0.1:${server.port}'));
     addTearDown(client.close);
     final connection = await client.connect('token');
-    // The message stream ends when the socket is cut, long before 8 MB.
+    // The message stream ends when the socket is cut. Unmetered, dart:io
+    // would buffer the message for as long as the server sends, and this
+    // would time out.
     await connection.messages.drain<void>().timeout(
       const Duration(seconds: 10),
     );
-    expect(sent, lessThan(2 * 1024 * 1024));
+    expect(sent, lessThan(limit));
   });
 }
