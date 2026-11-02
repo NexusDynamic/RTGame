@@ -25,15 +25,15 @@ dependencies:
   package_info_plus: ^10.1.0
   flutter_native_splash: ^2.4.7
   fast_immutable_collections: ^12.0.0
-  peer_coordinator: ^0.4.3
+  peer_coordinator: ^0.4.4
   http: ^1.2.2
   web_socket_channel: ^3.0.3
   # The lobby's wire protocol and proof-of-work, shared with the server. Only
   # protocol.dart and pow.dart are imported: both are web-safe.
   rise_together_lobby:
     path: server
-  webrtc_coordinator: ^0.2.2
-  webrtc_coordinator_flutter: ^0.2.3
+  webrtc_coordinator: ^0.2.3
+  webrtc_coordinator_flutter: ^0.2.4
   file_picker: ^13.1.0
 dev_dependencies:
   flutter_test:
