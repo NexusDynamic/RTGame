@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rise_together_game/src/online/lobby_client.dart';
+import 'package:rise_together_game/src/online/lobby_socket_io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// The lobby URL is a setting, so the lobby may be hostile.
@@ -73,5 +74,18 @@ void main() {
       const Duration(seconds: 10),
     );
     expect(sent, lessThan(limit));
+  });
+
+  // WebSocket.connect gives the connection factory port 0 for an address
+  // without one; dialling that broke every native match on the real lobby.
+  test('the metered socket dials the default port when none is given', () {
+    expect(lobbySocketPort(Uri.parse('https://lobby.example')), 443);
+    expect(lobbySocketPort(Uri.parse('http://lobby.example')), 80);
+    expect(
+      lobbySocketPort(Uri(scheme: 'https', host: 'lobby.example', port: 0)),
+      443,
+    );
+    expect(lobbySocketPort(Uri.parse('https://lobby.example:8443')), 8443);
+    expect(lobbySocketPort(Uri.parse('http://localhost:9000')), 9000);
   });
 }
