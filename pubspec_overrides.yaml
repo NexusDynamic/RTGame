@@ -1,0 +1,4 @@
+dependency_overrides:
+  # launcher_icons (dev only) needs pure_svg, which asks for xml ^6.3 though it
+  # works with xml 7 (required by lsl_core via peer_coordinator).
+  xml: ^7.1.0

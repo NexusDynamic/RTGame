@@ -47,7 +47,7 @@ dev_dependencies:
   # it arrives transitively via easy_shared_preferences, but relying on that is
   # how a transitive bump silently breaks the suite.
   shared_preferences: ^2.5.3
-  flutter_launcher_icons: ^0.14.4
+  launcher_icons: ^0.16.0
 flutter:
   uses-material-design: true
   assets:
